@@ -136,59 +136,46 @@ mcse_batchmeans <- function(x, size = min(100, floor(length(x)/5)), trim = 0, pr
   return(s)
 }
 
-get.ESS <- function(x, autocor = 1, ESS = 1){
-  M <- length(x)
-  # Re-centre at zero
+# revised version
+get.ESS <- function(x, ESS = 3) {
+  # Center the data
   x <- x - mean(x)
-  # Autocorrelations
-  if(ESS == 2){      # file:///C:/Users/14817/Desktop/Convergence%20for%20MCMC/mcmcse_vignette.pdf
-    lambda.sq <- var(x)
-    sigma.sq <- mcse.multi(x)$cov 
-    print(sigma.sq)
-    E <- M * lambda.sq / sigma.sq
-    return(E)
+  # Compute the length of the vector
+  M <- length(x)
+  # Compute the autocorrelations if necessary
+  if (ESS %in% c(1, 4)) {
+    rho <- stats::acf(x = x, lag.max = M - 2, plot = FALSE)$acf
   }
-  else if(ESS == 3){      # n*lambda/sigma = length(chain)*var(chain)/(mcse_batchmeans(chain))^2*length(chain) 
-    lambda.sq <- var(x)
-    sigma.sq <- (mcse_batchmeans(x))^2*M # it is supposed to have the same value in "ESS == 2", but it seems like there are some errors
-    E <- M * lambda.sq / sigma.sq
-    return(E)
-  }
-  
-  rho <- rep(NA, M-2)
-  if(autocor == 1){
-    rho <- stats::acf(x = x, lag.max = M-2, plot = FALSE)$acf
-  }
-  else if(autocor == 2){
-  for(lag in 0:(M-2)){
-    # Split time-series in two, separated by 'lag'
-    theta.1 <- x[1:(M-lag)]
-    theta.2 <- x[(1+lag):M]
-    # Autocorrelation
-    rho[lag + 1] <- cov(theta.2, theta.1)/sqrt(var(theta.2)*var(theta.1))
-   }
-  }
-  
-  # Effective sample size
+  # Compute the variance and autocovariance
+  lambda.sq <- var(x)
   if(ESS == 1){           # file:///C:/Users/14817/Desktop/Convergence%20for%20MCMC/Convergence%20diagnostics%20for%20MCMC.pdf
     E <- M / (1 + 2 * sum(rho))
   }
-  else if(ESS == 4){      # https://stats.stackexchange.com/questions/429470/what-is-the-correct-effective-sample-size-ess-calculation
-    lambda.sq <- var(x)
-    sigma.sq <- lambda.sq + 2 * sum(rho) #
-    E <- M * lambda.sq / sigma.sq
+  else if (ESS == 2) { # file:///C:/Users/14817/Desktop/Convergence%20for%20MCMC/mcmcse_vignette.pdf
+    sigma.sq <- mcse.multi(x)$cov
+  } 
+  else if (ESS == 3) {  # n*lambda/sigma = length(chain)*var(chain)/(mcse_batchmeans(chain))^2*length(chain) 
+    sigma.sq <- (mcse_batchmeans(x))^2 * M # it is supposed to have the same value in "ESS == 2", but it seems like there are some errors
+  } 
+  else if(ESS == 4) { # https://stats.stackexchange.com/questions/429470/what-is-the-correct-effective-sample-size-ess-calculation
+    sigma.sq <- lambda.sq + 2 * sum(rho)
   }
+  # Compute the effective sample size
+  E <- M * lambda.sq / sigma.sq
   return(E)
 }
 
 
-get.ESS(chain,1,1)
+
+get.ESS(chain)
+
+get.ESS(chain,1)
 #161849.3 the most closed value to the paper.
-get.ESS(chain,1,2)
+get.ESS(chain,2)
 #154088.2
-get.ESS(chain,1,3)
+get.ESS(chain,3)
 #155330.8
-get.ESS(chain,1,4)
+get.ESS(chain,4)
 #162173
 
 
@@ -196,11 +183,11 @@ effectiveSize(chain)
 #155823.8
 
 
-get.ESS(chain2,1,1)
+get.ESS(chain2,1)
 #161849 /// 4.783389
-get.ESS(chain2,1,2)
+get.ESS(chain2,2)
 #84.15389
-get.ESS(chain2,1,3)
+get.ESS(chain2,3)
 #3557.791
 multiESS(chaind2)
 #84.15389
@@ -243,7 +230,7 @@ geweke_toy <- function(chain, a = 0.1, b = 0.5, method = "coda") {
   n <- length(chain)
   A <- floor(a * n)
   B <- floor(b * n) 
-  #Calculating Geweke’s statistic
+  # Calculating Geweke’s statistic
   if (method == "normal"){
     ssa <- var(chain[1:A])
     ssb <- var(chain[B:n-1])
@@ -509,10 +496,6 @@ geweke_multi(x)
 # test. The stationarity test assesses the stationarity of a Markov chain by testing the hypothesis that the chain comes from a covariance 
 # stationary process. The half-width test checks whether the Markov chain sample size is adequate to estimate the mean values accurately.
 
-
-
-
-
 Heidelberger <- function(x, eps = 0.1, pvalue = 0.05) {
   
   # Convert input to matrix 
@@ -520,9 +503,9 @@ Heidelberger <- function(x, eps = 0.1, pvalue = 0.05) {
   
   # Initialize the Heidelberger and Welch object
   HW.mat0 <- matrix(0, ncol = 6, nrow = ncol(x))
-  dimnames(HW.mat0) <- list(colnames(x), 
-                            c("stest", "start", "pvalue", "htest", 
-                              "mean", "halfwidth"))
+  dimnames(HW.mat0) <- 
+    list(colnames(x), c("Stationarity test", "Starting point", "pvalue", "Halfwidth test", "Mean", "Halfwidth"))
+  
   HW.mat <- HW.mat0
   
   # Test each variable
@@ -545,7 +528,7 @@ Heidelberger <- function(x, eps = 0.1, pvalue = 0.05) {
       B <- cumsum(Y) - ybar * (1:n)
       Bsq <- (B * B)/(n * S0)
       I <- sum(Bsq)/n  # Actually this is Bn(s)_square
-
+      
       if (converged <- !is.na(I) && pcramer(I) < 1 - pvalue)
         break
     }
@@ -565,28 +548,42 @@ Heidelberger <- function(x, eps = 0.1, pvalue = 0.05) {
       nstart <- start(Y)[1]
     }
     
+    # Convert test results to text format
+    converged <- ifelse(converged, "passed", "failed")
+    passed.hw <- ifelse(passed.hw, "passed", "failed")
     # Store the test results of the current variable in HW.mat
-    HW.mat[j, ] <- c(converged, nstart, 1 - pcramer(I), 
-                     passed.hw, ybar, halfwidth)
+    # Use the 'format' function to control the number of decimal places for pvalue, Mean, and Halfwidth
+    HW.mat[j, ] <- c(converged, nstart, format(1 - pcramer(I), digits = 3), 
+                     passed.hw, format(ybar, digits = 4), format(halfwidth, digits = 3))
   }
   
-  # Convert HW.mat to heidel.diag type and return
-  class(HW.mat) <- "heidel.diag"
+  # Return the matrix without the class attribute
   return(HW.mat)
 }
 
+# The pcramer function computes the probability of exceeding the given 
+# value of a test statistic, based on the Cramer-Lundberg approximation.
+
 pcramer <- function (q, eps = 1e-05) 
 {
+  # Set the logarithmic epsilon value
   log.eps <- log(eps)
+  # Initialize a matrix of zeros to store the results
   y <- matrix(0, nrow = 4, ncol = length(q))
   for (k in 0:3) {
+    # Compute the Cramer-Lundberg approximation for the given q
     z <- gamma(k + 0.5) * sqrt(4 * k + 1)/(gamma(k + 1) * pi^(3/2) * sqrt(q))
+    # Compute the value of the test statistic
     u <- (4 * k + 1)^2/(16 * q)
+    # If the value of the test statistic is too large (i.e., the 
+    # exponent is too negative), set the result to zero to avoid underflow.
+    # Otherwise, compute the value of the Bessel function of the second kind
+    # with nu = 1/4 and multiply it with z and exp(-u).
     y[k + 1, ] <- ifelse(u > -log.eps, 0, z * exp(-u) * besselK(x = u, nu = 1/4))
   }
+  # Return the sum of the rows of y
   return(apply(y, 2, sum))
 }
-
 
 
 Heidelberger(chain)
@@ -677,46 +674,66 @@ gelman <- function (x, nvar = 1, xnames = c("x"), confidence = 0.95, autoburnin 
   W <- apply(S2, c(1, 2), mean) # within-chain variance W 
   xbar <- matrix(apply(x, 2, mean), nrow = Nvar, ncol = Nchain) # calculating the mean in each chain.
   B <- Niter * var(t(xbar)) # between-chain variance B 
-  if (Nvar > 1 && multivariate) {
-    if (is.R()) {
+  if (Nvar > 1 && multivariate) { # Check if multivariate case
+    if (is.R()) { 
       CW <- chol(W)
       emax <- eigen(backsolve(CW, t(backsolve(CW, B, transpose = TRUE)), 
-                              transpose = TRUE), symmetric = TRUE, only.values = TRUE)$values[1]
+                              transpose = TRUE), symmetric = TRUE, only.values = TRUE)$values[1] # Finding the largest eigenvalue
     }
-    else {
+    else { # If using non-R implementation
       emax <- eigen(qr.solve(W, B), symmetric = FALSE, 
                     only.values = TRUE)$values
     }
-    mpsrf <- sqrt((1 - 1/Niter) + (1 + 1/Nvar) * emax/Niter)
+    mpsrf <- sqrt((1 - 1/Niter) + (1 + 1/Nvar) * emax/Niter) # Calculate multivariate potential scale reduction factor (MPSRF)
   }
-  else mpsrf <- NULL
+  else mpsrf <- NULL # If not multivariate, set MPSRF to NULL
+  
+  # Get the diagonal of the within-chain variance
   w <- diag(W)
+  # Get the diagonal of the between-chain variance
   b <- diag(B)
-  s2 <- matrix(apply(S2, 3, diag), nrow = Nvar, ncol = Nchain)
-  muhat <- apply(xbar, 1, mean)
-  var.w <- apply(s2, 1, var)/Nchain
-  var.b <- (2 * b^2)/(Nchain - 1)
+  # Get the variance of each chain
+  s2 <- matrix(apply(S2, 3, diag), nrow = Nvar, ncol = Nchain) 
+  # Compute the estimate of the marginal posterior mean for each variable
+  muhat <- apply(xbar, 1, mean) 
+  # Calculate the within-chain variance
+  var.w <- apply(s2, 1, var)/Nchain 
+  # Calculate the between-chain variance
+  var.b <- (2 * b^2)/(Nchain - 1) 
+  # Compute the covariance between the within-chain and between-chain variance estimates
   cov.wb <- (Niter/Nchain) * diag(var(t(s2), t(xbar^2)) - 2 * 
-                                    muhat * var(t(s2), t(xbar)))
-  V <- (Niter - 1) * w/Niter + (1 + 1/Nchain) * b/Niter
+                                    muhat * var(t(s2), t(xbar))) 
+  # Calculate the estimate of the marginal posterior variance for each variable
+  V <- (Niter - 1) * w/Niter + (1 + 1/Nchain) * b/Niter 
+  # Calculate the variance of the estimate of the marginal posterior variance for each variable
   var.V <- ((Niter - 1)^2 * var.w + (1 + 1/Nchain)^2 * var.b + 
-              2 * (Niter - 1) * (1 + 1/Nchain) * cov.wb)/Niter^2
-  df.V <- (2 * V^2)/var.V #d_hat =2*(V_hat)^2/Var(V_hat)_hat
-  df.adj <- (df.V + 3)/(df.V + 1) # A refined version of PSRF is calculated, as suggested by Brooks and Gelman (1997) = 
-  # R_hat_adj = sqrt((d+3)*V_hat/(d-1)*W)
-  B.df <- Nchain - 1
-  W.df <- (2 * w^2)/var.w
-  R2.fixed <- (Niter - 1)/Niter
-  R2.random <- (1 + 1/Nchain) * (1/Niter) * (b/w)
-  R2.estimate <- R2.fixed + R2.random
-  R2.upper <- R2.fixed + qf((1 + confidence)/2, B.df, W.df) * 
-    R2.random
+              2 * (Niter - 1) * (1 + 1/Nchain) * cov.wb)/Niter^2 
+  # Calculate the effective number of independent samples
+  df.V <- (2 * V^2)/var.V 
+  # Calculate the adjusted degrees of freedom, as suggested by Brooks and Gelman (1997)
+  df.adj <- (df.V + 3)/(df.V + 1) # R_hat_adj = sqrt((d+3)*V_hat/(d-1)*W)
+  # Between-chain degrees of freedom
+  B.df <- Nchain - 1 
+  # Within-chain degrees of freedom
+  W.df <- (2 * w^2)/var.w 
+  # Estimate of the fixed variance component
+  R2.fixed <- (Niter - 1)/Niter 
+  # Estimate of the random variance component
+  R2.random <- (1 + 1/Nchain) * (1/Niter) * (b/w) 
+  # Total estimate of the variance component
+  R2.estimate <- R2.fixed + R2.random 
+  # Upper bound of the variance component
+  R2.upper <- R2.fixed + qf((1 + confidence)/2, B.df, W.df) * R2.random
+  # Compute the potential scale reduction factor (PSRF)
   psrf <- cbind(sqrt(df.adj * R2.estimate), sqrt(df.adj * R2.upper))
   dimnames(psrf) <- list(xnames, c("Point est.", "Upper C.I."))
   out <- list(psrf = psrf, mpsrf = mpsrf)
-  class(out) <- "gelman.diag"
-  out
+  return(out)
 }
+
+  
+
+
 x <- cbind(chain,chain2)
 gelman(x)
 
