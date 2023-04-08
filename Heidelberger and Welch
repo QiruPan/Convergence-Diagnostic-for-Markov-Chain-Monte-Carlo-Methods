@@ -1,0 +1,140 @@
+# Heidelberger and Welch 
+
+# The Heidelberger and Welch test (Heidelberger and Welch 1981, 1983) consists of two parts: a stationary portion test and a half-width
+# test. The stationarity test assesses the stationarity of a Markov chain by testing the hypothesis that the chain comes from a covariance 
+# stationary process. The half-width test checks whether the Markov chain sample size is adequate to estimate the mean values accurately.
+
+Heidelberger <- function(x, eps = 0.1, pvalue = 0.05) {
+  
+  # Convert input to matrix 
+  x <- as.matrix(x)
+  
+  # Initialize the Heidelberger and Welch object
+  HW.mat0 <- matrix(0, ncol = 6, nrow = ncol(x))
+  dimnames(HW.mat0) <- 
+    list(colnames(x), c("Stationarity test", "Starting point", "pvalue", "Halfwidth test", "Mean", "Halfwidth"))
+  
+  HW.mat <- HW.mat0
+  
+  # Test each variable
+  for (j in 1:ncol(x)) {
+    # Generate a set of starting positions from the start position to halfway through the iterated sequence
+    start.vec <- seq(from = 1, to = floor(nrow(x)/2), by = floor(nrow(x)/10))
+    # Get the iteration sequence of the current variable
+    Y <- x[, j, drop = TRUE]
+    n1 <- length(Y)
+    
+    # Schruben's test, by iteratively reducing the length of the sequence, checks whether the sequence is convergent
+    
+    # Spectral estimates for the second half
+    S0 <- spectrum0.ar(window(Y, start=nrow(x)/2))$spec
+    converged <- FALSE
+    for (i in seq_along(start.vec)) {
+      Y <- window(Y, start = start.vec[i])
+      n <- length(Y)
+      ybar <- mean(Y)
+      B <- cumsum(Y) - ybar * (1:n)
+      Bsq <- (B * B)/(n * S0)
+      I <- sum(Bsq)/n  # Actually this is Bn(s)_square
+      # Bn is supposed to converges in distribution to a Brownian bridge (Billingsley 1986)
+      
+      if (converged <- !is.na(I) && pcramer(I) < 1 - pvalue)
+        break
+    }
+    
+    # If it converges, recalculate S0, calculate the half-width and whether it passes the half-width test
+    # The part of the chain that is deemed stationary is put through a half-width test, which reports whether the
+    # sample size is adequate to meet certain accuracy requirements for the mean estimates. Running the simulation
+    # less than this length of time would not meet the requirement, while running it longer would not provide any
+    # additional information that is needed. The statistic calculated here is the relative half-width (RHW) of the
+    # confidence interval
+    
+    # the relative half-width: RHW = 1.96 * sqrt(spectrum0.ar(Y)$spec/n) / ybar
+    # The RHW quantifies accuracy of the 1 - alhpa level confidence interval of the mean estimate by measuring the ratio between the 
+    # sample standard error of the mean and the mean itself. In other words, you can stop the Markov chain if the variability of the
+    # mean stabilizes with respect to the mean
+    
+    S0ci <- spectrum0.ar(Y)$spec
+    halfwidth <- 1.96 * sqrt(S0ci/n)
+    passed.hw <- !is.na(halfwidth) & (abs(halfwidth/ybar) <= eps)
+    
+    # Returns NA if not converged or cannot be computed
+    if (!converged || is.na(I) || is.na(halfwidth)) {
+      nstart <- NA
+      passed.hw <- NA
+      halfwidth <- NA
+      ybar <- NA
+    } else {
+      nstart <- start(Y)[1]
+    }
+    
+    # Convert test results to text format
+    converged <- ifelse(converged, "passed", "failed")
+    passed.hw <- ifelse(passed.hw, "passed", "failed")
+    # Store the test results of the current variable in HW.mat
+    # Use the 'format' function to control the number of decimal places for pvalue, Mean, and Halfwidth
+    HW.mat[j, ] <- c(converged, nstart, format(1 - pcramer(I), digits = 3), 
+                     passed.hw, format(ybar, digits = 4), format(halfwidth, digits = 3))
+  }
+  
+  # Return the matrix without the class attribute
+  return(HW.mat)
+}
+
+# The pcramer function computes the probability of exceeding the given 
+# value of a test statistic, based on the Cramer-Lundberg approximation.
+
+pcramer <- function (q, eps = 1e-05) 
+{
+  # Set the logarithmic epsilon value
+  log.eps <- log(eps)
+  # Initialize a matrix of zeros to store the results
+  y <- matrix(0, nrow = 4, ncol = length(q))
+  for (k in 0:3) {
+    # Compute the Cramer-Lundberg approximation for the given q
+    z <- gamma(k + 0.5) * sqrt(4 * k + 1)/(gamma(k + 1) * pi^(3/2) * sqrt(q))
+    # Compute the value of the test statistic
+    u <- (4 * k + 1)^2/(16 * q)
+    # If the value of the test statistic is too large (i.e., the 
+    # exponent is too negative), set the result to zero to avoid underflow.
+    # Otherwise, compute the value of the Bessel function of the second kind
+    # with nu = 1/4 and multiply it with z and exp(-u).
+    y[k + 1, ] <- ifelse(u > -log.eps, 0, z * exp(-u) * besselK(x = u, nu = 1/4))
+  }
+  # Return the sum of the rows of y
+  return(apply(y, 2, sum))
+}
+# The Cramer-Lundberg approximation is an approximation of the Cramer-von Mises test and is used to calculate the $p$-value of the
+# Cramer-von Mises statistic. The form of the Cramer-Lundberg approximation is as follows:
+# p_value = pcramer(q) = ∑ {k=0}^{3} z_k * exp(-u_k) * K_1/4(u_k),
+# where z_k <- gamma(k + 0.5) * sqrt(4 * k + 1)/(gamma(k + 1) * pi^(3/2) * sqrt(q));
+# u_k <- (4 * k + 1)^2/(16 * q);
+# When nu = 1/4, K_1/4(u_k) = z_k * exp(-u_k) * besselK(x = u_k, nu = 1/4)
+
+
+spectrum0.ar <- function (x) 
+{
+  x <- as.matrix(x)
+  v0 <- order <- numeric(ncol(x))
+  names(v0) <- names(order) <- colnames(x)
+  z <- 1:nrow(x)
+  for (i in 1:ncol(x)) {
+    lm.out <- lm(x[, i] ~ z)
+    if (identical(all.equal(sd(residuals(lm.out)), 0), TRUE)) {
+      v0[i] <- 0
+      order[i] <- 0
+    }
+    else {
+      ar.out <- ar(x[, i], aic = TRUE)
+      v0[i] <- ar.out$var.pred/(1 - sum(ar.out$ar))^2
+      order[i] <- ar.out$order
+    }
+  }
+  return(list(spec = v0, order = order))
+}
+
+
+
+Heidelberger(chain)
+library(coda)
+heidel.diag(chain)
