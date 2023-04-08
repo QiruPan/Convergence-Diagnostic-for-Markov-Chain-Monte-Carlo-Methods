@@ -56,8 +56,6 @@ gelman(x)
 # effective number of degrees of freedom for the model parameters, calculated as: (2 * V^2)/var.V. At the same time, when calculating
 # the variance, we need to calculate the covariance between different variables (because the target distribution may be different at 
 # this time), so we need to use cov.wb to calculate the covariance and use if to judge whether it is multivariate.
-# Specific calculation method is in P24 of:
-# file:///C:/Users/14817/Desktop/Convergence%20for%20MCMC/SAS_introbayes.pdf
 
 # Please note that this function has only one variable by default, and its name is "x". If you need to put chain sample matrices of 
 # different target distributions into this function as input, you need to input the number of variables and it is best to name them 
