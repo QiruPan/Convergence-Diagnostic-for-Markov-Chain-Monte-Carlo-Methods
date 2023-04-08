@@ -75,3 +75,116 @@ geweke_toy(chain2,method = "coda")
 # $p_value
 # [1] 0.455918
 
+
+
+# A more complex approach
+
+# When calculating the Geweke statistic, the purpose of dividing the sampling sequence into multiple sub sequences is to increase the
+# sample size and improve the accuracy of the statistical test. If only the entire sampling sequence is used for the Geweke test, May 
+# lead to inaccurate test results, especially if sampling autocorrelation is high. By dividing the sampling sequence into multiple sub 
+# sequences, we can obtain more samples and reduce the influence of sampling autocorrelation on the Geweke test. Simultaneously, using 
+# multiple sub sequences for the Geweke test can also provide more information in order to identify possible problems or biases in MCMC 
+# sampling.
+
+geweke <- function(x, a = 0.1, b = 0.5, num_batches = 20, method = "normal"){
+  n <- length(x)
+  A <- floor(a * n)
+  B <- floor(b * n)
+  batch_size <- floor((n - B) / num_batches)
+  
+  # Initialize vector of results
+  z <- numeric(num_batches)
+  p_value <- numeric(num_batches)
+  
+  if (method == "normal"){
+    for (i in 1:num_batches) {
+      # Calculate start and end indices for current batch
+      start <- B + (i - 1) * batch_size
+      end <- start + batch_size
+      
+      # Calculate Geweke’s statistic for current batch
+      ssa <- var(x[1:A])
+      ssb <- var(x[start:end])
+      z[i] <- (mean(x[1:A]) - mean(x[start:end])) / sqrt(ssa / length(x[1:A]) + ssb / length(x[start:end]))
+      
+      # Calculate p-value for current batch
+      p_value[i] <- 2 * pmin(pnorm(abs(z[i]), lower.tail = FALSE), pnorm(abs(z[i]), lower.tail = TRUE))
+    }
+  }
+  else if (method == "coda"){
+    for (i in 1:num_batches) {
+      # Calculate start and end indices for current batch
+      start <- B + (i - 1) * batch_size
+      end <- start + batch_size
+      
+      # Calculate Geweke’s statistic for current batch
+      ssa <- spectrum0.ar(x[1:A])$spec
+      ssb <- spectrum0.ar(x[start:end])$spec
+      z[i] <- (mean(x[1:A]) - mean(x[start:end])) / sqrt(ssa / length(x[1:A]) + ssb / length(x[start:end]))
+      
+      # Calculate p-value for current batch
+      p_value[i] <- 2 * pmin(pnorm(abs(z[i]), lower.tail = FALSE), pnorm(abs(z[i]), lower.tail = TRUE))
+    }
+  }
+  # Combine results from all batches
+  result <- list(z = mean(z), p_value = mean(p_value))
+  names(result) <- c("Geweke’s statistic", "p_value")
+  return(result)
+}
+geweke(chain,method = "coda")
+# $`Geweke’s statistic`
+# [1] 0.3312266
+# $p_value
+# [1] 0.5306944
+
+geweke(chain2,method = "coda")
+# $`Geweke’s statistic`
+# [1] -5.065428
+# $p_value
+# [1] 0.154139
+
+
+# Wouldn't this violate the original intention of geweke? By default, geweke calculates the variance for the last 50% of the samples.
+
+# The original intention of the Geweke method is to test whether the last 50% of the samples come from the same distribution, rather 
+# than to test whether each batch comes from the same distribution. In this function, in order to achieve batch calculation, the sample 
+# is divided into multiple small batches. Therefore, what this function implements is not the standard Geweke method, but a 
+# modification of the Geweke method.
+
+
+# So we should choose as many batches as possible when there are enough independent and identically distributed samples in each batch, 
+# right?
+
+# Generally speaking, we hope that there are enough independent and identically distributed samples in each batch, and we also want to 
+# choose as many batches as possible to more accurately test whether the samples come from the same distribution.
+# When using the Geweke method in practice, some basic analysis is usually performed on the data set to determine the nature and 
+# distribution of the sample data, and then select the appropriate batch size and batch number based on this information.
+# It should be noted that the selection of batch size and number of batches may have an impact on the test results, so when using the 
+# Geweke method, it is necessary to adjust it according to the specific situation and conduct multiple experiments to verify the 
+# reliability of the results.
+
+
+# A version that can handle multi-dimensional situations XD.
+geweke_multi <- function(x, a = 0.1, b = 0.5, num_batches = 20, method = "normal") {
+  n <- dim(x)[1]
+  m <- dim(x)[2]
+  results <- lapply(1:m, function(i) {
+    geweke(x[,i], a, b, num_batches, method)
+  })
+  names_vec <- c("Geweke’s statistic", "p_value")
+  names(results) <- paste0("Chain", 1:m)
+  for (i in 1:m) {
+    names(results[[i]]) <- names_vec
+  }
+  return(results)
+}
+
+set.seed(123)
+x <- MASS::mvrnorm(n = 1000, mu = c(0,0), Sigma = matrix(c(1,0.5,0.5,2), nrow = 2))
+# Calculate Geweke's test for each dimension
+geweke_multi(x)
+
+# Geweke's conclusions may be inaccurate if the Markov chain takes a long time to warm up. Geweke's approach is based on the assumption 
+# that the Markov chain is already stable. If the Markov chain has not yet converged to a stable distribution, Geweke's results may be 
+# affected by the warm-up period, leading to erroneous conclusions. Therefore, samples from the warm-up period usually need to be 
+# discarded before applying the Geweke method. 
