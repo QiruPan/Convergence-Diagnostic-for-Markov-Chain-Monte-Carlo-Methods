@@ -1,0 +1,53 @@
+rm(list = ls())
+#example using MH sampling method, in this case π(x) = exp(-x), P(x prime| x) = 0.5exp(-0.5x)
+set.seed(1)
+n <- 323700 
+burnin <- 0#burn-in 
+
+
+chain <- rep(NA,323700)
+x <- 0.1 #First sample chain is staring(default) value
+chain[1] <- x
+
+for (i in 2:n) {
+  
+  proposed_x <- rexp(1,rate = 0.5)
+  aprob <- min(1, (dexp(proposed_x, rate = 1)/dexp(x, rate = 1)*dexp(x, rate = 0.5)/dexp(proposed_x, rate = 0.5))) 
+  #acceptance rate, where:
+  
+  u <- runif(1)
+  if (u < aprob) 
+    x <- proposed_x
+  chain[i] <- x
+}
+if (burnin == 0){
+  chain=as.matrix(chain)
+}
+if (burnin != 0){
+  chain=as.matrix(chain[-(1:burnin)]) #discord the burn-in part
+}
+
+
+#example using MH sampling method, in this case π(x) = exp(-x), P(x prime| x) = 5exp(-5x)
+chain2 <- rep(NA,323700)
+x <- 0.1 #First sample chain is staring(default) value
+chain2[1] <- x
+
+for (i in 2:n) {
+  
+  proposed_x <- rexp(1,rate = 5)
+  aprob <- min(1, (dexp(proposed_x, rate = 1)/dexp(x, rate = 1)*dexp(x, rate = 5)/dexp(proposed_x, rate = 5))) 
+  #acceptance rate, where:
+  
+  u <- runif(1)
+  if (u < aprob) 
+    x <- proposed_x
+  chain2[i] <- x
+}
+
+if (burnin == 0){
+  chain2=as.matrix(chain2)
+}
+if (burnin != 0){
+  chain2=as.matrix(chain2[-(1:burnin)]) #discord the burn-in part
+}
