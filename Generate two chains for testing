@@ -1,5 +1,5 @@
 rm(list = ls())
-#example using MH sampling method, in this case π(x) = exp(-x), P(x prime| x) = 0.5exp(-0.5x)
+# example using MH sampling method, in this case π(x) = exp(-x), P(x prime| x) = 0.5exp(-0.5x)
 set.seed(1)
 n <- 323700 
 burnin <- 0#burn-in 
