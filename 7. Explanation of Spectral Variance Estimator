@@ -1,10 +1,10 @@
-Spectral estimation is a method used to estimate the frequency components of a signal. In the time domain, the waveform of a signal changes over time, while in the 
-frequency domain, a signal can be represented as a superposition of different frequency components. The purpose of spectral estimation is to estimate the magnitude 
-of its components at different frequencies from the sample data of the signal.
+#Spectral estimation is a method used to estimate the frequency components of a signal. In the time domain, the waveform of a signal changes over time, while in the 
+#frequency domain, a signal can be represented as a superposition of different frequency components. The purpose of spectral estimation is to estimate the magnitude 
+#of its components at different frequencies from the sample data of the signal.
 
-In the code below, an autoregressive model is used to estimate the spectrum of the signal. The autoregressive model is a model used to model time series data, which 
-assumes that the current data value is a linear combination of the previous data values. In this model, the autoregressive coefficients represent the correlation 
-between data at different points in time, and the spectral estimation value can be represented as a function of the autoregressive coefficients.
+#In the code below, an autoregressive model is used to estimate the spectrum of the signal. The autoregressive model is a model used to model time series data, which 
+#assumes that the current data value is a linear combination of the previous data values. In this model, the autoregressive coefficients represent the correlation 
+#between data at different points in time, and the spectral estimation value can be represented as a function of the autoregressive coefficients.
 
 spectrum0.ar <- function (x) 
 {
@@ -35,38 +35,38 @@ spectrum0.ar <- function (x)
 
 
 
-Specifically, ar.out$var.pred represents the variance when using the autoregressive model to predict the current data, while sum(ar.out$ar) represents the sum of the 
-autoregressive coefficients, which typically range between -1 and 1. Therefore, the formula ar.out$var.pred/(1 - sum(ar.out$ar))^2 can remove the influence of the 
-autoregressive coefficients from the spectral estimation, resulting in a more accurate spectral estimation value.
+#Specifically, ar.out$var.pred represents the variance when using the autoregressive model to predict the current data, while sum(ar.out$ar) represents the sum of the 
+#autoregressive coefficients, which typically range between -1 and 1. Therefore, the formula ar.out$var.pred/(1 - sum(ar.out$ar))^2 can remove the influence of the 
+#autoregressive coefficients from the spectral estimation, resulting in a more accurate spectral estimation value.
 
-Regarding spectral estimation values, they are a type of amplitude value in the frequency domain and can be used to represent the energy distribution of a signal at 
-different frequencies. In spectral estimation, methods such as periodogram and model-based methods (such as autoregressive models) are typically used to estimate 
-spectral values.
+#Regarding spectral estimation values, they are a type of amplitude value in the frequency domain and can be used to represent the energy distribution of a signal at 
+#different frequencies. In spectral estimation, methods such as periodogram and model-based methods (such as autoregressive models) are typically used to estimate 
+#spectral values.
 
-It is worth noting that a special spectral estimation method is used here, namely, the spectral estimation method at zero frequency, which corresponds to the variance 
-estimation in the autoregressive model. In this function, it is reasonable to use spectral estimation values to estimate the variance because Geweke's statistics 
-calculation requires variance estimates from two time windows.
+#It is worth noting that a special spectral estimation method is used here, namely, the spectral estimation method at zero frequency, which corresponds to the variance 
+#estimation in the autoregressive model. In this function, it is reasonable to use spectral estimation values to estimate the variance because Geweke's statistics 
+#calculation requires variance estimates from two time windows.
 
-To calculate Geweke's statistics, it is necessary to estimate the variances in these two time windows separately and compute their weighted average. In this function,
-spectral estimation values are used to calculate the variance estimates in these two time windows. Specifically, the spectrum0.ar function is used to calculate the 
-spectral estimation value of the autoregressive model at zero frequency, and then they are used to estimate the variances before a% and after b%. Finally, the Geweke 
-statistic is calculated by taking the weighted average of these two variances. This is because the spectral estimation value at zero frequency can reflect the overall
-variance in time series data and can remove the influence of autoregressive coefficients from spectral estimation, resulting in a more accurate estimation of the total
-variance. Therefore, using the spectral estimation value at zero frequency as the variance estimate value for Geweke's statistics calculation is reasonable.
+#To calculate Geweke's statistics, it is necessary to estimate the variances in these two time windows separately and compute their weighted average. In this function,
+#spectral estimation values are used to calculate the variance estimates in these two time windows. Specifically, the spectrum0.ar function is used to calculate the 
+#spectral estimation value of the autoregressive model at zero frequency, and then they are used to estimate the variances before a% and after b%. Finally, the Geweke 
+#statistic is calculated by taking the weighted average of these two variances. This is because the spectral estimation value at zero frequency can reflect the overall
+#variance in time series data and can remove the influence of autoregressive coefficients from spectral estimation, resulting in a more accurate estimation of the total
+#variance. Therefore, using the spectral estimation value at zero frequency as the variance estimate value for Geweke's statistics calculation is reasonable.
 
-The autoregressive (AR) spectral estimation method (such as the spectrum0.ar function used in the code above) can estimate the spectral density function by considering
-the autocorrelation structure of the data. This method is often used in signal processing and time series analysis because it can fully utilize the autocorrelation 
-structure of the time series data, thus more accurately estimating the frequency components of the signal.
+#The autoregressive (AR) spectral estimation method (such as the spectrum0.ar function used in the code above) can estimate the spectral density function by considering
+#the autocorrelation structure of the data. This method is often used in signal processing and time series analysis because it can fully utilize the autocorrelation 
+#structure of the time series data, thus more accurately estimating the frequency components of the signal.
 
-In cases where the convergence effect is poor, the sample variance may be inaccurate because it does not take into account the autocorrelation structure of the time 
-series data. Therefore, using the zero-frequency spectral estimate as the variance estimate may be better because it can to some extent consider the autocorrelation 
-structure of the time series data, especially when the autocorrelation coefficient is large.
+#In cases where the convergence effect is poor, the sample variance may be inaccurate because it does not take into account the autocorrelation structure of the time 
+#series data. Therefore, using the zero-frequency spectral estimate as the variance estimate may be better because it can to some extent consider the autocorrelation 
+#structure of the time series data, especially when the autocorrelation coefficient is large.
 
-However, autoregressive spectral estimation is not always more accurate than directly calculating the sample variance. In some cases, direct calculation of the sample 
-variance may be more accurate, for example, when there are outliers or anomalies in the data. The autoregressive spectral estimation method assumes that the time series
-is stationary and performs spectral estimation under this assumption. However, the presence of outliers or anomalies may affect the stationarity of the time series. In
-this case, the spectral density estimated by the autoregressive spectral estimation method may be distorted and therefore unreliable. Specifically, outliers or 
-anomalies may cause changes in the variance or autocovariance structure of the time series, violating the stationarity assumption. This may result in poor fitting of 
-the autoregressive model and distortion of the spectral density estimated by the autoregressive spectral estimation method.
+#However, autoregressive spectral estimation is not always more accurate than directly calculating the sample variance. In some cases, direct calculation of the sample 
+#variance may be more accurate, for example, when there are outliers or anomalies in the data. The autoregressive spectral estimation method assumes that the time 
+#series is stationary and performs spectral estimation under this assumption. However, the presence of outliers or anomalies may affect the stationarity of the time 
+#series. In this case, the spectral density estimated by the autoregressive spectral estimation method may be distorted and therefore unreliable. Specifically, outliers
+#or anomalies may cause changes in the variance or autocovariance structure of the time series, violating the stationarity assumption. This may result in poor fitting 
+#of the autoregressive model and distortion of the spectral density estimated by the autoregressive spectral estimation method.
 
-Therefore, when choosing a variance estimation method, the characteristics of the data and the application scenario need to be considered.
+#Therefore, when choosing a variance estimation method, the characteristics of the data and the application scenario need to be considered.
