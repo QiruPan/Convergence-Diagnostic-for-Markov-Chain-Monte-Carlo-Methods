@@ -1,0 +1,155 @@
+# Gelman-Rubin
+
+# Uses parallel chains with dispersed initial values to test whether they all converge to the same target distribution. Failure 
+# could indicate the presence of a multi-mode posterior distribution (different chains converge to different local modes) or the need
+# to run a longer chain (burn-in is yet to be completed).One-sided test based on a variance ratio test statistic. Large bRc values 
+# indicate rejection.
+
+# There are two main problems with the toy model. The first small problem is that the improved version of Brooks and Gelman (1997) was
+# not considered when calculating the PSRF statistics (considering the possible existence of multicollinearity between samples, the 
+# effective freedom is considered at the end of the calculation. degree). The second problem is that the function only considers chains
+# with the same target distribution, that is, even if multiple Markov chains are input, they are considered to have the same target 
+# distribution.
+
+gelman_toy <- function(x,plot=TRUE){
+  if(!is.matrix(x)) x <- as.matrix(x)
+  if(!is.numeric(x)) stop("x must be numeric")
+  if(dim(x)[1]<5) stop("each chain must have at least 5 iterations")
+  if(dim(x)[2]<2) stop("there must be at least 2 chains")
+  m <- dim(x)[2]
+  n <- dim(x)[1]
+  
+  # between-chain variance B:
+  
+  theta_bar_m <- colMeans(x) 
+  theta_bar <- (1/m)*sum(theta_bar_m)
+  b <- rep(NA,dim(x)[2])
+  for (i in 1:m){
+    b[i] <- (theta_bar_m[i] - theta_bar) ^ 2
+  }
+  B <- (n/(m-1)) * sum(b)
+  
+  # within-chain variance W:
+  s_m_square <- apply(x,2,var) 
+  W <- (1/m) * sum(s_m_square)
+  
+  # The estimate of the variance V_hat:
+  V_hat <- ((n-1)/n) * W + ((m+1)/n*m) * B
+  
+  # A refined version of PSRF R_hat:
+  R_hat <- sqrt(varhat/W) # In the "real refined " version, R_hat will be recalculated. 
+   
+  if(plot){
+    plot(R_hat,type="b",ylab="R hat",xlab="Parameter")
+    abline(h=c(1.1,1.2),lty=c(2,3),col=c("red","orange"))
+    legend("topright",lty=c(2,3),col=c("red","orange"),
+           legend=c("R hat = 1.1","R hat = 1.2"))
+  }
+  cat("Potential scale reduction factors:\n")
+  return(R_hat)
+}
+
+x <- cbind(chain,chain2)
+gelman(x)
+
+# Next, we consider ways to solve the above problems, In Brooks and Gelman's (1998) modified version of PSRF, df.V represents the 
+# effective number of degrees of freedom for the model parameters, calculated as: (2 * V^2)/var.V. At the same time, when calculating
+# the variance, we need to calculate the covariance between different variables (because the target distribution may be different at 
+# this time), so we need to use cov.wb to calculate the covariance and use if to judge whether it is multivariate.
+# Specific calculation method is in P24 of:
+# file:///C:/Users/14817/Desktop/Convergence%20for%20MCMC/SAS_introbayes.pdf
+
+# Please note that this function has only one variable by default, and its name is "x". If you need to put chain sample matrices of 
+# different target distributions into this function as input, you need to input the number of variables and it is best to name them 
+# respectively.
+
+# Warning: When the autoburnin parameter is set to TRUE by default, the gelman.diag function automatically removes the first half 
+# of the MCMC chain (the burn-in period). In practical experience, I have repeatedly verified that when autoburnin is set to 
+# TRUE, the function tends to produce non-convergent results (the potential scale reduction factors increase, as do the point est.
+# and Upper C.I.). Investigation is needed to determine whether setting autoburnin to TRUE by default is appropriate.
+
+gelman <- function (x, nvar = 1, xnames = c("x"), confidence = 0.95, autoburnin = TRUE, multivariate = TRUE) 
+{
+  if (dim(x)[1] < 2) 
+    stop("You need at least two chains")
+  Niter <- dim(x)[1]
+  Nchain <- dim(x)[2]
+  Nvar <- nvar
+  if (autoburnin && start(x)[1] < end(x)[1]/2) 
+    x <- window(x, start = end(x)[1]/2 + 1)
+  S2 <- array(sapply(as.data.frame(x), var, simplify = TRUE), dim = c(Nvar, Nvar, Nchain)) # calculating the variance in each chain.
+  W <- apply(S2, c(1, 2), mean) # within-chain variance W 
+  xbar <- matrix(apply(x, 2, mean), nrow = Nvar, ncol = Nchain) # calculating the mean in each chain.
+  B <- Niter * var(t(xbar)) # between-chain variance B 
+  if (Nvar > 1 && multivariate) { # Check if multivariate case
+    if (is.R()) { 
+      CW <- chol(W)
+      emax <- eigen(backsolve(CW, t(backsolve(CW, B, transpose = TRUE)), 
+                              transpose = TRUE), symmetric = TRUE, only.values = TRUE)$values[1] # Finding the largest eigenvalue
+    }
+    else { # If using non-R implementation
+      emax <- eigen(qr.solve(W, B), symmetric = FALSE, 
+                    only.values = TRUE)$values
+    }
+    mpsrf <- sqrt((1 - 1/Niter) + (1 + 1/Nvar) * emax/Niter) # Calculate multivariate potential scale reduction factor (MPSRF)
+  }
+  else mpsrf <- NULL # If not multivariate, set MPSRF to NULL
+  
+  # Get the diagonal of the within-chain variance
+  w <- diag(W)
+  # Get the diagonal of the between-chain variance
+  b <- diag(B)
+  # Get the variance of each chain
+  s2 <- matrix(apply(S2, 3, diag), nrow = Nvar, ncol = Nchain) 
+  # Compute the estimate of the marginal posterior mean for each variable
+  muhat <- apply(xbar, 1, mean) 
+  # Calculate the within-chain variance
+  var.w <- apply(s2, 1, var)/Nchain 
+  # Calculate the between-chain variance
+  var.b <- (2 * b^2)/(Nchain - 1) 
+  # Compute the covariance between the within-chain and between-chain variance estimates
+  cov.wb <- (Niter/Nchain) * diag(var(t(s2), t(xbar^2)) - 2 * 
+                                    muhat * var(t(s2), t(xbar))) 
+  # Calculate the estimate of the marginal posterior variance for each variable
+  V <- (Niter - 1) * w/Niter + (1 + 1/Nchain) * b/Niter 
+  # Calculate the variance of the estimate of the marginal posterior variance for each variable
+  var.V <- ((Niter - 1)^2 * var.w + (1 + 1/Nchain)^2 * var.b + 
+              2 * (Niter - 1) * (1 + 1/Nchain) * cov.wb)/Niter^2 
+  # Calculate the effective number of independent samples
+  df.V <- (2 * V^2)/var.V 
+  # Calculate the adjusted degrees of freedom, as suggested by Brooks and Gelman (1997)
+  df.adj <- (df.V + 3)/(df.V + 1) # R_hat_adj = sqrt((d+3)*V_hat/(d-1)*W)
+  # Between-chain degrees of freedom
+  B.df <- Nchain - 1 
+  # Within-chain degrees of freedom
+  W.df <- (2 * w^2)/var.w 
+  # Estimate of the fixed variance component
+  R2.fixed <- (Niter - 1)/Niter 
+  # Estimate of the random variance component
+  R2.random <- (1 + 1/Nchain) * (1/Niter) * (b/w) 
+  # Total estimate of the variance component
+  R2.estimate <- R2.fixed + R2.random 
+  # Upper bound of the variance component
+  R2.upper <- R2.fixed + qf((1 + confidence)/2, B.df, W.df) * R2.random
+  # Compute the potential scale reduction factor (PSRF)
+  psrf <- cbind(sqrt(df.adj * R2.estimate), sqrt(df.adj * R2.upper))
+  dimnames(psrf) <- list(xnames, c("Point est.", "Upper C.I."))
+  out <- list(psrf = psrf, mpsrf = mpsrf)
+  return(out)
+}
+
+x <- cbind(chain,chain2)
+gelman(x)
+
+library(coda)
+x <- mcmc.list(as.mcmc(chain),as.mcmc(chain2))
+gelman.diag(x)
+gelman.plot(x)
+
+# A large PSRF indicates that the between-chain variance is substantially greater than the within-chain variance, so that longer simulation
+# is needed. If the PSRF is close to 1, you can conclude that each of the M chains has stabilized, and they are likely to have reached the 
+# target distribution.
+# It is best to choose different initial values for all M chains. The initial values should be as dispersed from each other as possible so
+# that the Markov chains can fully explore different parts of the distribution before they converge to the target. Similar initial values 
+# can be risky because all of the chains can get stuck in a local maximum; that is something this convergence test cannot detect. If you do
+# not supply initial values forall the different chains, the procedures generate them for you.
