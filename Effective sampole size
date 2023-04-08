@@ -1,4 +1,6 @@
-#Minnimum ESS for different p, alpha and epsilon 
+# Effective sampole size
+
+# Minnimum ESS for different p, alpha and epsilon 
 min.ESS <- function(p, alpha = 0.05, epsilon = 0.05){
   ess <- (2^(2/p)*pi/(p*gamma(1/2))^2/p)*(qchisq(1-alpha,p)/epsilon^2)
   return(ess)
