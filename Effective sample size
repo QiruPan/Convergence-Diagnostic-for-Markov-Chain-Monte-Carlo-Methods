@@ -1,4 +1,4 @@
-# Effective sampole size
+# Effective sample size
 
 # Minnimum ESS for different p, alpha and epsilon 
 min.ESS <- function(p, alpha = 0.05, epsilon = 0.05){
