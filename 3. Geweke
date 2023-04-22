@@ -131,18 +131,30 @@ geweke <- function(x, a = 0.1, b = 0.5, num_batches = 20, method = "normal"){
   names(result) <- c("Geweke’s statistic", "p_value")
   return(result)
 }
-geweke(chain,method = "coda")
+geweke_toy(chain,method = "normal") 
 # $`Geweke’s statistic`
-# [1] 0.3312266
+# [1] 0.9568996
 # $p_value
-# [1] 0.5306944
+# [1] 0.338618
 
-geweke(chain2,method = "coda")
+geweke_toy(chain,method = "coda")   
 # $`Geweke’s statistic`
-# [1] -5.065428
+# [1] 0.9614776
 # $p_value
-# [1] 0.154139
+# [1] 0.3363121
 
+
+geweke_toy(chain2,method = "normal") 
+# $`Geweke’s statistic`
+# [1] 0.7455853
+# $p_value
+# [1] 0.455918
+
+geweke_toy(chain2,method = "coda")
+# $`Geweke’s statistic`
+# [1] 0.0193498
+# $p_value
+# [1] 0.9845621
 
 # Wouldn't this violate the original intention of geweke? By default, geweke calculates the variance for the last 50% of the samples.
 
