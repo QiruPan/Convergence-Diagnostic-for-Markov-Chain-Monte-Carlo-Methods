@@ -100,3 +100,13 @@ get.ESS(chain,3)
 #155330.8
 get.ESS(chain,4)
 #162173
+
+
+
+rho <- stats::acf(x = chain2, lag.max = 327000-2, plot = FALSE)$acf
+sum(rho)
+#0.5
+sum(rho[1:50000])
+#14526.14
+library(ggplot2)
+ggplot() + geom_line(aes(x = 1:length(rho), y = rho)) + labs(x = "number of iterations", y = "auto correlations")
