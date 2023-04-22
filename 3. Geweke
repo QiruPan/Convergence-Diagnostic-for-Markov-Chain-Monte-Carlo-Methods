@@ -12,7 +12,8 @@
 # This is an example function that only outputs the statistics in the geweke test once, that is to say, regardless of batch.
 # By default we calculate the difference between first a = 10% part and last b = 50% part.
 
-geweke_toy <- function(chain, a = 0.1, b = 0.5, method = "coda") {
+
+geweke_toy <- function(chain, a = 0.1, b = 0.5, method = "spectral") {
   n <- length(chain)
   A <- floor(a * n)
   B <- floor(b * n) 
@@ -24,11 +25,13 @@ geweke_toy <- function(chain, a = 0.1, b = 0.5, method = "coda") {
       sqrt(ssa / length(chain[1:A]) + ssb / length(chain[B:n-1]))
   }
   
-  else if (method == "coda"){
+  else if (method == "spectral"){
     # This ssa and ssb are the another calculating method of variance (The spectral density at frequency zero) which are using in "coda"
     # Specifically, the spectrum0.ar function performs an autoregressive fit on time series data and computes the variance of the 
     # fitted residuals. This variance can be used as the variance estimate required in the calculation of the Geweke statistic.
-
+    
+    # 此处的ssa和ssb是在“coda”中使用的另一种方差计算方法（零频率处的频谱密度）
+    # 具体而言，spectrum0.ar函数会对时间序列数据进行自回归拟合，并计算拟合残差的方差。这个方差可以作为Geweke统计量的计算中所需的方差估计。
     ssa <- spectrum0.ar(chain[1:A])$spec
     ssb <- spectrum0.ar(chain[B:n-1])$spec
     z <- (mean(chain[1:A]) - mean(chain[B:n-1])) / 
@@ -40,6 +43,33 @@ geweke_toy <- function(chain, a = 0.1, b = 0.5, method = "coda") {
   names(result) <- c("Geweke’s statistic", "p_value")
   return(result)
 }
+
+geweke_toy(chain,method = "normal") 
+# $`Geweke’s statistic`
+# [1] 0.9568996
+# $p_value
+# [1] 0.338618
+
+geweke_toy(chain,method = "spectral")   
+# $`Geweke’s statistic`
+# [1] 0.9614776
+# $p_value
+# [1] 0.3363121
+
+
+geweke_toy(chain2,method = "normal") 
+# $`Geweke’s statistic`
+# [1] 0.7455853
+# $p_value
+# [1] 0.455918
+
+geweke_toy(chain2,method = "spectral")
+# $`Geweke’s statistic`
+# [1] 0.0193498
+# $p_value
+# [1] 0.9845621
+
+
 
 
 spectrum0.ar <- function (x) 
@@ -63,19 +93,6 @@ spectrum0.ar <- function (x)
   return(list(spec = v0, order = order))
 }
 
-geweke_toy(chain,method = "coda")   
-# $`Geweke’s statistic`
-# [1] 0.9614776
-# $p_value
-# [1] 0.3363121
-
-geweke_toy(chain2,method = "coda")
-# $`Geweke’s statistic`
-# [1] 0.7455853
-# $p_value
-# [1] 0.455918
-
-
 
 # A more complex approach
 
@@ -86,7 +103,7 @@ geweke_toy(chain2,method = "coda")
 # multiple sub sequences for the Geweke test can also provide more information in order to identify possible problems or biases in MCMC 
 # sampling.
 
-geweke <- function(x, a = 0.1, b = 0.5, num_batches = 20, method = "normal"){
+geweke <- function(x, a = 0.1, b = 0.5, num_batches = 20, method = "spectral"){
   n <- length(x)
   A <- floor(a * n)
   B <- floor(b * n)
@@ -111,7 +128,7 @@ geweke <- function(x, a = 0.1, b = 0.5, num_batches = 20, method = "normal"){
       p_value[i] <- 2 * pmin(pnorm(abs(z[i]), lower.tail = FALSE), pnorm(abs(z[i]), lower.tail = TRUE))
     }
   }
-  else if (method == "coda"){
+  else if (method == "spectral"){
     for (i in 1:num_batches) {
       # Calculate start and end indices for current batch
       start <- B + (i - 1) * batch_size
@@ -131,31 +148,32 @@ geweke <- function(x, a = 0.1, b = 0.5, num_batches = 20, method = "normal"){
   names(result) <- c("Geweke’s statistic", "p_value")
   return(result)
 }
-geweke_toy(chain,method = "normal") 
+
+
+geweke(as.matrix(chain), method = "normal")
 # $`Geweke’s statistic`
-# [1] 0.9568996
+# [1] 0.4778486
 # $p_value
-# [1] 0.338618
+# [1] 0.4073557
 
-geweke_toy(chain,method = "coda")   
+geweke(chain,method = "spectral")
 # $`Geweke’s statistic`
-# [1] 0.9614776
+# [1] 0.3312266
 # $p_value
-# [1] 0.3363121
+# [1] 0.5306944
 
 
-geweke_toy(chain2,method = "normal") 
+geweke(chain2, method = "normal")
 # $`Geweke’s statistic`
-# [1] 0.7455853
+# [1] -95.21099
 # $p_value
-# [1] 0.455918
+# [1] 0.00768044
 
-geweke_toy(chain2,method = "coda")
+geweke(chain2,method = "spectral")
 # $`Geweke’s statistic`
-# [1] 0.0193498
+# [1] -5.065428
 # $p_value
-# [1] 0.9845621
-
+# [1] 0.154139
 # Wouldn't this violate the original intention of geweke? By default, geweke calculates the variance for the last 50% of the samples.
 
 # The original intention of the Geweke method is to test whether the last 50% of the samples come from the same distribution, rather 
