@@ -8,7 +8,8 @@ min.ESS <- function(p, alpha = 0.05, epsilon = 0.05){
 min.ESS(2, epsilon = 0.05)
 # 153658.4
 
-get.ESS <- function(x, ESS = 3) {
+# revised version
+get.ESS <- function(x, ESS = 'batchmeans') {
   # Center the data
   x <- x - mean(x)
   # Compute the length of the vector
@@ -18,24 +19,26 @@ get.ESS <- function(x, ESS = 3) {
     rho <- stats::acf(x = x, lag.max = M - 2, plot = FALSE)$acf
   }
   # Compute the variance and autocovariance
-  lambda.sq <- spectrum0.ar(x)$spec
-  if(ESS == 1){           
+  lambda.sq <- var(x)
+  if(ESS == 1){           # file:///C:/Users/14817/Desktop/Convergence%20for%20MCMC/Convergence%20diagnostics%20for%20MCMC.pdf
     E <- M / (1 + 2 * sum(rho))
   }
-  else if (ESS == 'coda') { # method in mcmcse
+  else if (ESS == 'coda') { # file:///C:/Users/14817/Desktop/Convergence%20for%20MCMC/mcmcse_vignette.pdf
     sigma.sq <- mcse.multi(x)$cov
+    E <- M * lambda.sq / sigma.sq
   } 
   else if (ESS == 'batchmeans') {  # n*lambda/sigma = length(chain)*var(chain)/(mcse_batchmeans(chain))^2*length(chain) 
     sigma.sq <- (mcse_batchmeans(x))^2 * M # it is supposed to have the same value in "ESS == 2", but it seems like there are some errors
-  } 
+    E <- M * lambda.sq / sigma.sq
+    } 
   else if(ESS == 4) { # https://stats.stackexchange.com/questions/296059/effective-sample-size-greater-than-actual-sample-size/315874
     sigma.sq <- lambda.sq + 2 * sum(rho)
-  }
+    E <- M * lambda.sq / sigma.sq
+    }
   # Compute the effective sample size
-  E <- M * lambda.sq / sigma.sq
+  
   return(E)
 }
-
 
 #Calculate mcse using method "batchmeans"
 mcse_batchmeans <- function(x, size = min(100, floor(length(x)/5)), trim = 0, progress = FALSE){
