@@ -50,7 +50,7 @@ gelman_toy <- function(x,plot=TRUE){
 }
 
 x <- cbind(chain,chain2)
-gelman(x)
+gelman_toy(x)
 
 # Next, we consider ways to solve the above problems, In Brooks and Gelman's (1998) modified version of PSRF, df.V represents the 
 # effective number of degrees of freedom for the model parameters, calculated as: (2 * V^2)/var.V. At the same time, when calculating
