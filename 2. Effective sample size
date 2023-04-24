@@ -109,4 +109,5 @@ sum(rho)
 sum(rho[1:50000])
 #14526.14
 library(ggplot2)
-ggplot() + geom_line(aes(x = 1:length(rho), y = rho)) + labs(x = "number of iterations", y = "auto correlations")
+ggplot() + geom_line(aes(x = 1:length(rho), y = rho)) + labs(x = "number of iterations", y = "auto correlations") + 
+  geom_hline(yintercept = 0, color = "red")
