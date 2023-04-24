@@ -143,37 +143,77 @@ geweke <- function(x, a = 0.1, b = 0.5, num_batches = 20, method = "spectral"){
       p_value[i] <- 2 * pmin(pnorm(abs(z[i]), lower.tail = FALSE), pnorm(abs(z[i]), lower.tail = TRUE))
     }
   }
+  
+  # Calculate the proportion of p-values less than 0.05
+  p_prop <- mean(p_value < 0.05)
+  
   # Combine results from all batches
-  result <- list(z = mean(z), p_value = mean(p_value))
-  names(result) <- c("Geweke’s statistic", "p_value")
+  result <- list(z = z, p_value = p_value, p_prop = p_prop)
+  names(result) <- c("Geweke’s statistic", "p_value", "p_value < 0.05 proportion")
+  
+  # Plot the Geweke statistics and p-values
+  par(mfrow = c(2, 1))
+  plot(1:length(z), z, type = "p", xlab = "Batch", ylab = "Geweke statistic")
+  abline(h = 0, lty = 2, col = "gray")
+  abline(h = 1.96, lty = 2, col = "red")
+  abline(h = -1.96, lty = 2, col = "red")
+  plot(1:length(p_value), p_value, type = "p", xlab = "Batch", ylab = "p-value")
+  abline(h = 0.05, lty = 2, col = "red")
+  
+  # Return the result
   return(result)
 }
 
-
 geweke(as.matrix(chain), method = "normal")
 # $`Geweke’s statistic`
-# [1] 0.4778486
+# [1]  0.7955711  0.2403806 -0.8789043  0.5954554  1.1936875  0.9066064  0.6471732  2.2176063  1.9695905 -0.4217743  0.2640111 -0.8993436
+# [13]  1.4209809  0.1172982  0.8251360 -2.2998323  1.1362761 -0.8269415  2.2367535  0.2723065
+
 # $p_value
-# [1] 0.4073557
+# [1] 0.42628135 0.81003523 0.37945314 0.55153907 0.23260025 0.36461495 0.51751985 0.02658169 0.04888532 0.67318980 0.79177139 0.36846966
+# [13] 0.15532231 0.90662378 0.40929436 0.02145772 0.25584104 0.40827024 0.02530245 0.78538639
+
+# $`p_value < 0.05 proportion`
+# [1] 0.2
 
 geweke(chain,method = "spectral")
 # $`Geweke’s statistic`
-# [1] 0.3312266
+# [1]  0.55708664  0.17091344 -0.62301654  0.40833060  0.81823344  0.62651367  0.44923632  1.55656743  1.40100980 -0.28025488  0.17203576
+# [12] -0.63314688  0.96562816  0.08064388  0.57793040 -1.63194456  0.78713090 -0.55787855  1.56791426  0.18053645
+
 # $p_value
-# [1] 0.5306944
+# [1] 0.5774682 0.8642918 0.5332737 0.6830310 0.4132239 0.5309781 0.6532612 0.1195732 0.1612111 0.7792820 0.8634094 0.5266377 0.3342303
+# [14] 0.9357252 0.5633111 0.1026912 0.4312052 0.5769273 0.1169011 0.8567314
+
+# $`p_value < 0.05 proportion`
+# [1] 0
+
 
 
 geweke(chain2, method = "normal")
 # $`Geweke’s statistic`
-# [1] -95.21099
+# [1]   69.292861   93.482889   91.740339  111.968701   67.318169   77.404564   44.966124   98.991176   71.637879  102.904402   14.658004
+# [12]  112.877037   84.631449 -144.791918    5.374841  -11.527786 -325.710137 -325.710137 -325.710137 -325.710137
+
 # $p_value
-# [1] 0.00768044
+# [1] 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00
+# [11] 1.197408e-48 0.000000e+00 0.000000e+00 0.000000e+00 7.665027e-08 9.556960e-31 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00
+
+# $`p_value < 0.05 proportion`
+# [1] 1
 
 geweke(chain2,method = "spectral")
 # $`Geweke’s statistic`
-# [1] -5.065428
+# [1]  2.6946038  3.5393954  3.5041277  4.1138124  2.7603660  3.0712434  1.6683505  3.7803055  2.8169506  3.8721165  0.5797126  4.0679273
+# [13]  3.2985403 -4.6585195  0.1596631 -0.3006672 -9.1260349 -9.1260349 -9.1260349 -9.1260349
+
 # $p_value
-# [1] 0.154139
+# [1] 7.047237e-03 4.010446e-04 4.581056e-04 3.891778e-05 5.773664e-03 2.131693e-03 9.524616e-02 1.566360e-04 4.848198e-03 1.078944e-04
+# [11] 5.621084e-01 4.743317e-05 9.718893e-04 3.184916e-06 8.731465e-01 7.636683e-01 7.105407e-20 7.105407e-20 7.105407e-20 7.105407e-20
+
+# $`p_value < 0.05 proportion`
+# [1] 0.8
+
 
 # Wouldn't this violate the original intention of geweke? By default, geweke calculates the variance for the last 50% of the samples.
 
