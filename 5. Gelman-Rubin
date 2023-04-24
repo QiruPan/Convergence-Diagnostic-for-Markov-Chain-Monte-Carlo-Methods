@@ -37,7 +37,7 @@ gelman_toy <- function(x,plot=TRUE){
   V_hat <- ((n-1)/n) * W + ((m+1)/n*m) * B
   
   # A refined version of PSRF R_hat:
-  R_hat <- sqrt(varhat/W) # In the "real refined " version, R_hat will be recalculated. 
+  R_hat <- sqrt(V_hat/W) # In the "real refined " version, R_hat will be recalculated. 
    
   if(plot){
     plot(R_hat,type="b",ylab="R hat",xlab="Parameter")
