@@ -46,7 +46,7 @@ acf(chain)
 
 
 
-set.seed(2)
+set.seed(1)
 n <- 323700 
 burnin <- 0#burn-in 
 
@@ -78,7 +78,7 @@ if (burnin != 0){
 # sum(rho2)
 # [1] 0.5
 
-chiand2 <- as.data.frame(chain2)
+chaind2 <- as.data.frame(chain2)
 library("ggplot2")
 p <- ggplot(chaind2, aes(x = chain2))
 p+ geom_density(color = "black", fill = "gray")
@@ -94,7 +94,7 @@ acf(chain2)
 
 #ESS
 #ESS by package "mcmcse"
-multiESS(chaind)
+multiESS(chain)
 #16181.71
 minESS(1)
 #6146 
@@ -136,8 +136,9 @@ mcse_batchmeans <- function(x, size = min(100, floor(length(x)/5)), trim = 0, pr
   return(s)
 }
 
+
 # revised version
-get.ESS <- function(x, ESS = 3) {
+get.ESS <- function(x, ESS = 'batchmeans') {
   # Center the data
   x <- x - mean(x)
   # Compute the length of the vector
@@ -151,17 +152,20 @@ get.ESS <- function(x, ESS = 3) {
   if(ESS == 1){           # file:///C:/Users/14817/Desktop/Convergence%20for%20MCMC/Convergence%20diagnostics%20for%20MCMC.pdf
     E <- M / (1 + 2 * sum(rho))
   }
-  else if (ESS == 2) { # file:///C:/Users/14817/Desktop/Convergence%20for%20MCMC/mcmcse_vignette.pdf
+  else if (ESS == 'coda') { # file:///C:/Users/14817/Desktop/Convergence%20for%20MCMC/mcmcse_vignette.pdf
     sigma.sq <- mcse.multi(x)$cov
+    E <- M * lambda.sq / sigma.sq
   } 
-  else if (ESS == 3) {  # n*lambda/sigma = length(chain)*var(chain)/(mcse_batchmeans(chain))^2*length(chain) 
+  else if (ESS == 'batchmeans') {  # n*lambda/sigma = length(chain)*var(chain)/(mcse_batchmeans(chain))^2*length(chain) 
     sigma.sq <- (mcse_batchmeans(x))^2 * M # it is supposed to have the same value in "ESS == 2", but it seems like there are some errors
-  } 
-  else if(ESS == 4) { # https://stats.stackexchange.com/questions/429470/what-is-the-correct-effective-sample-size-ess-calculation
+    E <- M * lambda.sq / sigma.sq
+    } 
+  else if(ESS == 4) { # https://stats.stackexchange.com/questions/296059/effective-sample-size-greater-than-actual-sample-size/315874
     sigma.sq <- lambda.sq + 2 * sum(rho)
-  }
+    E <- M * lambda.sq / sigma.sq
+    }
   # Compute the effective sample size
-  E <- M * lambda.sq / sigma.sq
+  
   return(E)
 }
 
@@ -171,9 +175,9 @@ get.ESS(chain)
 
 get.ESS(chain,1)
 #161849.3 the most closed value to the paper.
-get.ESS(chain,2)
+get.ESS(chain,ESS = 'batchmeans')
 #154088.2
-get.ESS(chain,3)
+get.ESS(chain,ESS = 'coda')
 #155330.8
 get.ESS(chain,4)
 #162173
@@ -184,14 +188,16 @@ effectiveSize(chain)
 
 
 get.ESS(chain2,1)
-#161849 /// 4.783389
-get.ESS(chain2,2)
-#84.15389
-get.ESS(chain2,3)
+#161849 
+get.ESS(chain2,ESS = 'batchmeans')
 #3557.791
+get.ESS(chain2,ESS = 'coda')
+#84.15389
+get.ESS(chain2,4)
+
 multiESS(chaind2)
 #84.15389
-
+multiESS(chain)
 
 library("coda")
 effectiveSize(chain2)
@@ -203,6 +209,26 @@ effectiveSize(chain2)
 rho <- stats::acf(x = chain2, lag.max = 327000-2, plot = FALSE)$acf
 sum(rho)
 #0.5
+sum(rho[1:50000])
+#14526.14
+library(ggplot2)
+ggplot() + geom_line(aes(x = 1:length(rho), y = rho)) + labs(x = "number of iterations", y = "auto correlations") + 
+  geom_hline(yintercept = 0, color = "red")
+
+# We can see from the plot that the autocorrelation coefficients of the second chain remained high during the first tens of thousands of
+# iterations, indicating poor convergence (high autocorrelation means that adjacent samples are highly correlated, indicating that the 
+# samples obtained are not i.i.d.). In fact, we can obtain a sum of 14526.14 for the first 50000 terms. However, as the number of 
+# iterations increases, the autocorrelation coefficients gradually change from positive to negative. Surprisingly, these negative 
+# autocorrelation coefficients cancel out the initial positive ones. The cumulative value of these coefficients at iteration 323299 is 
+# 0.5, leading to an erroneous conclusion.
+
+
+
+
+
+
+
+
 
 
 # Geweke
@@ -226,7 +252,7 @@ sum(rho)
 
 # 这是一个示例函数，他只输出一次Geweke检验中的统计量，也就是说不分batch多次计算.默认情况下我们计算前10%和后50%的差异.
 
-geweke_toy <- function(chain, a = 0.1, b = 0.5, method = "coda") {
+geweke_toy <- function(chain, a = 0.1, b = 0.5, method = "spectral") {
   n <- length(chain)
   A <- floor(a * n)
   B <- floor(b * n) 
@@ -238,7 +264,7 @@ geweke_toy <- function(chain, a = 0.1, b = 0.5, method = "coda") {
       sqrt(ssa / length(chain[1:A]) + ssb / length(chain[B:n-1]))
   }
   
-  else if (method == "coda"){
+  else if (method == "spectral"){
     # This ssa and ssb are the another calculating method of variance (The spectral density at frequency zero) which are using in "coda"
     # Specifically, the spectrum0.ar function performs an autoregressive fit on time series data and computes the variance of the 
     # fitted residuals. This variance can be used as the variance estimate required in the calculation of the Geweke statistic.
@@ -257,17 +283,30 @@ geweke_toy <- function(chain, a = 0.1, b = 0.5, method = "coda") {
   return(result)
 }
 
-geweke_toy(chain,method = "coda")   
+geweke_toy(chain,method = "normal") 
+# $`Geweke’s statistic`
+# [1] 0.6611086
+# $p_value
+# [1] 0.338618
+
+geweke_toy(chain,method = "spectral")   
 # $`Geweke’s statistic`
 # [1] 0.9614776
 # $p_value
-# [1] 0.3363121
+# [1] 0.5085427
 
-geweke_toy(chain2,method = "coda")
+
+geweke_toy(chain2,method = "normal") 
 # $`Geweke’s statistic`
 # [1] 0.7455853
 # $p_value
 # [1] 0.455918
+
+geweke_toy(chain2,method = "spectral")
+# $`Geweke’s statistic`
+# [1] 0.0193498
+# $p_value
+# [1] 0.9845621
 
 
 
@@ -358,10 +397,10 @@ spectrum0.ar <- function (x)
 # a：表示前期采样占总采样长度的比例，默认为0.1。
 # b：表示后期采样占总采样长度的比例，默认为0.5。
 # num_batches：表示将采样过程分成的批次数量，默认为20。
-# method：表示计算Geweke统计量时使用的方法，默认为"normal"。可选的值包括"normal"和"coda"。
-# 如果method为"normal"，则使用常规方法计算Geweke统计量。如果method为"coda"，则使用coda软件包提供的spectrum0.ar函数计算Geweke统计量。
+# method：表示计算Geweke统计量时使用的方法，默认为"normal"。可选的值包括"normal"和"spectral"。
+# 如果method为"normal"，则使用常规方法计算Geweke统计量。如果method为"spectral"，则使用coda软件包提供的spectrum0.ar函数计算Geweke统计量。
 
-geweke <- function(x, a = 0.1, b = 0.5, num_batches = 20, method = "normal"){
+geweke <- function(x, a = 0.1, b = 0.5, num_batches = 20, method = "spectral"){
   n <- length(x)
   A <- floor(a * n)
   B <- floor(b * n)
@@ -386,7 +425,7 @@ geweke <- function(x, a = 0.1, b = 0.5, num_batches = 20, method = "normal"){
       p_value[i] <- 2 * pmin(pnorm(abs(z[i]), lower.tail = FALSE), pnorm(abs(z[i]), lower.tail = TRUE))
     }
   }
-  else if (method == "coda"){
+  else if (method == "spectral"){
     for (i in 1:num_batches) {
       # Calculate start and end indices for current batch
       start <- B + (i - 1) * batch_size
@@ -401,37 +440,77 @@ geweke <- function(x, a = 0.1, b = 0.5, num_batches = 20, method = "normal"){
       p_value[i] <- 2 * pmin(pnorm(abs(z[i]), lower.tail = FALSE), pnorm(abs(z[i]), lower.tail = TRUE))
     }
   }
+  
+  # Calculate the proportion of p-values less than 0.05
+  p_prop <- mean(p_value < 0.05)
+  
   # Combine results from all batches
-  result <- list(z = mean(z), p_value = mean(p_value))
-  names(result) <- c("Geweke’s statistic", "p_value")
+  result <- list(z = z, p_value = p_value, p_prop = p_prop)
+  names(result) <- c("Geweke’s statistic", "p_value", "p_value < 0.05 proportion")
+  
+  # Plot the Geweke statistics and p-values
+  par(mfrow = c(2, 1))
+  plot(1:length(z), z, type = "p", xlab = "Batch", ylab = "Geweke statistic")
+  abline(h = 0, lty = 2, col = "gray")
+  abline(h = 1.96, lty = 2, col = "red")
+  abline(h = -1.96, lty = 2, col = "red")
+  plot(1:length(p_value), p_value, type = "p", xlab = "Batch", ylab = "p-value")
+  abline(h = 0.05, lty = 2, col = "red")
+  
+  # Return the result
   return(result)
 }
 
-
-geweke(as.matrix(chain))
+geweke(as.matrix(chain), method = "normal")
 # $`Geweke’s statistic`
-# [1] 0.4778486
-# $p_value
-# [1] 0.4073557
+# [1]  0.7955711  0.2403806 -0.8789043  0.5954554  1.1936875  0.9066064  0.6471732  2.2176063  1.9695905 -0.4217743  0.2640111 -0.8993436
+# [13]  1.4209809  0.1172982  0.8251360 -2.2998323  1.1362761 -0.8269415  2.2367535  0.2723065
 
-geweke(chain,method = "coda")
+# $p_value
+# [1] 0.42628135 0.81003523 0.37945314 0.55153907 0.23260025 0.36461495 0.51751985 0.02658169 0.04888532 0.67318980 0.79177139 0.36846966
+# [13] 0.15532231 0.90662378 0.40929436 0.02145772 0.25584104 0.40827024 0.02530245 0.78538639
+
+# $`p_value < 0.05 proportion`
+# [1] 0.2
+
+geweke(chain,method = "spectral")
 # $`Geweke’s statistic`
-# [1] 0.3312266
+# [1]  0.55708664  0.17091344 -0.62301654  0.40833060  0.81823344  0.62651367  0.44923632  1.55656743  1.40100980 -0.28025488  0.17203576
+# [12] -0.63314688  0.96562816  0.08064388  0.57793040 -1.63194456  0.78713090 -0.55787855  1.56791426  0.18053645
+
 # $p_value
-# [1] 0.5306944
+# [1] 0.5774682 0.8642918 0.5332737 0.6830310 0.4132239 0.5309781 0.6532612 0.1195732 0.1612111 0.7792820 0.8634094 0.5266377 0.3342303
+# [14] 0.9357252 0.5633111 0.1026912 0.4312052 0.5769273 0.1169011 0.8567314
+
+# $`p_value < 0.05 proportion`
+# [1] 0
 
 
-geweke(chain2)
+
+geweke(chain2, method = "normal")
 # $`Geweke’s statistic`
-# [1] -95.21099
-# $p_value
-# [1] 0.00768044
+# [1]   69.292861   93.482889   91.740339  111.968701   67.318169   77.404564   44.966124   98.991176   71.637879  102.904402   14.658004
+# [12]  112.877037   84.631449 -144.791918    5.374841  -11.527786 -325.710137 -325.710137 -325.710137 -325.710137
 
-geweke(chain2,method = "coda")
-# $`Geweke’s statistic`
-# [1] -5.065428
 # $p_value
-# [1] 0.154139
+# [1] 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00
+# [11] 1.197408e-48 0.000000e+00 0.000000e+00 0.000000e+00 7.665027e-08 9.556960e-31 0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00
+
+# $`p_value < 0.05 proportion`
+# [1] 1
+
+geweke(chain2,method = "spectral")
+# $`Geweke’s statistic`
+# [1]  2.6946038  3.5393954  3.5041277  4.1138124  2.7603660  3.0712434  1.6683505  3.7803055  2.8169506  3.8721165  0.5797126  4.0679273
+# [13]  3.2985403 -4.6585195  0.1596631 -0.3006672 -9.1260349 -9.1260349 -9.1260349 -9.1260349
+
+# $p_value
+# [1] 7.047237e-03 4.010446e-04 4.581056e-04 3.891778e-05 5.773664e-03 2.131693e-03 9.524616e-02 1.566360e-04 4.848198e-03 1.078944e-04
+# [11] 5.621084e-01 4.743317e-05 9.718893e-04 3.184916e-06 8.731465e-01 7.636683e-01 7.105407e-20 7.105407e-20 7.105407e-20 7.105407e-20
+
+# $`p_value < 0.05 proportion`
+# [1] 0.8
+
 
 # Wouldn't this violate the original intention of geweke? By default, geweke calculates the variance for the last 50% of the samples.
 
@@ -460,7 +539,7 @@ geweke.diag(chain)
 geweke.diag(chain2)
 #var1 
 #0.01928
-#-3.865 
+
 
 
 # A version that can handle multi-dimensional situations XD.
@@ -470,7 +549,7 @@ geweke_multi <- function(x, a = 0.1, b = 0.5, num_batches = 20, method = "normal
   results <- lapply(1:m, function(i) {
     geweke(x[,i], a, b, num_batches, method)
   })
-  names_vec <- c("Geweke’s statistic", "p_value")
+  names_vec <- c("Geweke’s statistic", "p_value","Propotion of below 0.05")
   names(results) <- paste0("Chain", 1:m)
   for (i in 1:m) {
     names(results[[i]]) <- names_vec
@@ -528,12 +607,26 @@ Heidelberger <- function(x, eps = 0.1, pvalue = 0.05) {
       B <- cumsum(Y) - ybar * (1:n)
       Bsq <- (B * B)/(n * S0)
       I <- sum(Bsq)/n  # Actually this is Bn(s)_square
+      # Bn is supposed to converges in distribution to a Brownian bridge (Billingsley 1986)
       
       if (converged <- !is.na(I) && pcramer(I) < 1 - pvalue)
         break
     }
     
     # If it converges, recalculate S0, calculate the half-width and whether it passes the half-width test
+    # The part of the chain that is deemed stationary is put through a half-width test, which reports whether the
+    # sample size is adequate to meet certain accuracy requirements for the mean estimates. Running the simulation
+    # less than this length of time would not meet the requirement, while running it longer would not provide any
+    # additional information that is needed. The statistic calculated here is the relative half-width (RHW) of the
+    # confidence interval
+    # the relative half-width: RHW = 1.96 * sqrt(spectrum0.ar(Y)$spec/n) / ybar
+    # RHW 通过测量均值的样本标准误差与均值本身之间的比率。换句话说，如果均值的可变性相对于均值稳定下来，则可以停止马尔可夫链。一个隐含的
+    # 假设是大均值通常伴随着大方差。如果不满足此假设，则此测试可能会产生错误拒绝（例如接近 0 的小均值和较大的标准差）或错误接受（例如非常
+    # 大的均值和相对较小的方差   
+    # The RHW quantifies accuracy of the 1 - alpha level confidence interval of the mean estimate by measuring the ratio between the 
+    # sample standard error of the mean and the mean itself. In other words, you can stop the Markov chain if the variability of the
+    # mean stabilizes with respect to the mean
+    
     S0ci <- spectrum0.ar(Y)$spec
     halfwidth <- 1.96 * sqrt(S0ci/n)
     passed.hw <- !is.na(halfwidth) & (abs(halfwidth/ybar) <= eps)
@@ -584,9 +677,19 @@ pcramer <- function (q, eps = 1e-05)
   # Return the sum of the rows of y
   return(apply(y, 2, sum))
 }
+# Cramer-Lundberg逼近式是Cramer-von Mises检验的一个近似方法，用于计算Cramer-von Mises统计量的$p$-值。Cramer-Lundberg逼近式的形式如下：
+# The Cramer-Lundberg approximation is an approximation of the Cramer-von Mises test and is used to calculate the $p$-value of the
+# Cramer-von Mises statistic. The form of the Cramer-Lundberg approximation is as follows:
+# p_value = pcramer(q) = ∑ {k=0}^{3} z_k * exp(-u_k) * K_1/4(u_k),
+# where z_k <- gamma(k + 0.5) * sqrt(4 * k + 1)/(gamma(k + 1) * pi^(3/2) * sqrt(q));
+# u_k <- (4 * k + 1)^2/(16 * q);
+# When nu = 1/4, K_1/4(u_k) = z_k * exp(-u_k) * besselK(x = u_k, nu = 1/4)
 
 
 Heidelberger(chain)
+
+Heidelberger(chain2)
+
 library(coda)
 heidel.diag(chain)
 
@@ -630,7 +733,7 @@ gelman_toy <- function(x,plot=TRUE){
   V_hat <- ((n-1)/n) * W + ((m+1)/n*m) * B
   
   # A refined version of PSRF R_hat:
-  R_hat <- sqrt(varhat/W) # In the "real refined " version, R_hat will be recalculated. 
+  R_hat <- sqrt(V_hat/W) # In the "real refined " version, R_hat will be recalculated. 
    
   if(plot){
     plot(R_hat,type="b",ylab="R hat",xlab="Parameter")
@@ -642,8 +745,10 @@ gelman_toy <- function(x,plot=TRUE){
   return(R_hat)
 }
 
+
 x <- cbind(chain,chain2)
-gelman(x)
+gelman_toy(x)
+
 
 # Next, we consider ways to solve the above problems, In Brooks and Gelman's (1998) modified version of PSRF, df.V represents the 
 # effective number of degrees of freedom for the model parameters, calculated as: (2 * V^2)/var.V. At the same time, when calculating
