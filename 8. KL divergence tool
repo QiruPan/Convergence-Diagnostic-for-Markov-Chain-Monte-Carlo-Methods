@@ -1,0 +1,84 @@
+# Tool 1 in the paper
+# The main idea of Tool 1 is to compare the distribution of the MCMC chain with the target distribution. If the chain has reached 
+# equilibrium, these two distributions should be very similar to each other.
+# The comparison is done through Kullback-Leibler (KL) divergence, which is a measure of how one probability distribution diverges 
+# from a second, expected probability distribution. It is an asymmetric measure of the difference between two probability distributions
+# P and Q.
+# In the context of MCMC convergence diagnostics, the KL divergence is used to quantify the difference between the target distribution
+# and the distribution of the MCMC chain.
+
+# 定义目标分布
+target_density <- function(x) {
+  dexp(x, rate = 1)
+}
+
+# 计算一维KL散度的函数
+kl_divergence_1d <- function(p_density, q_density, dx) {
+  p_density <- p_density + 1e-10
+  q_density <- q_density + 1e-10
+  sum(p_density * log(p_density / q_density)) * dx
+}
+
+# 实现Tool 1 for single chain
+tool_1_single_chain_1d <- function(chain, target_density, threshold = 0.06) {
+  # 对输入的链进行KDE处理，得到链的分布
+  akde_chain <- density(chain)
+  
+  # 计算分布与目标分布之间的KL散度
+  target_density_values <- target_density(akde_chain$x)
+  kl_divergence <- kl_divergence_1d(target_density_values, akde_chain$y, diff(akde_chain$x)[1])
+  
+  # 检查是否小于阈值
+  if(kl_divergence < threshold) {
+    print("The chain has converged")
+  } else {
+    print("The chain has not converged")
+  }
+  
+  return(kl_divergence)
+}
+
+
+# Chain1
+kl_div = tool_1_single_chain_1d(chain, target_density, threshold = 0.05)
+# [1] "The chain has converged"
+
+# Output KL divergence
+print(kl_div)
+# [1] 0.1015121
+
+
+# Chain2
+kl_div = tool_1_single_chain_1d(chain2, target_density, threshold = 0.05)
+# [1] "The chain has not converged"
+
+# Output KL divergence
+print(kl_div)
+# [1] 0.03413247
+
+
+
+
+# In Tool 1, we first estimate the density of the chain using a kernel density estimator. We then calculate the KL divergence between this 
+# estimated density and the target density.
+
+# The algorithm steps are as follows:
+#  We first generate an MCMC chain and let it run for a while.
+#  Next, we use Kernel Density Estimation (KDE) to estimate the density of the chain.
+#  We calculate the KL divergence between the target distribution and the estimated density of the chain.
+
+# If the KL divergence is small (below some threshold), we conclude that the chain has converged. Otherwise, the chain has not converged.
+
+
+# Note: This tool considers the maximum KL divergence over the different chains. This is a more conservative approach. If the maximum KL 
+# divergence is below a certain threshold, then all chains can be considered as having converged.
+
+# Remember that KL divergence is not symmetric, so the divergence of P from Q is not the same as the divergence of Q from P. In the context 
+# of MCMC, it's more interesting to compute the divergence of the chain distribution from the target distribution, because we want to know how 
+# much the chain distribution diverges from the target.
+
+# Tool 1 has the advantage of being a simple and intuitive measure of chain convergence, but it has the disadvantage of being sensitive to the 
+# way the chain's density is estimated. In particular, the results may vary depending on the bandwidth of the kernel density estimator.
+
+# Remember that, as with any other convergence diagnostic, passing Tool 1 is not a guarantee of convergence. It should be used in combination 
+# with other diagnostics and common sense checks.
