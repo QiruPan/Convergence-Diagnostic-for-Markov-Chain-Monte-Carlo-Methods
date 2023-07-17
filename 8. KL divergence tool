@@ -7,28 +7,28 @@
 # In the context of MCMC convergence diagnostics, the KL divergence is used to quantify the difference between the target distribution
 # and the distribution of the MCMC chain.
 
-# 定义目标分布
+# Define target distribution
 target_density <- function(x) {
   dexp(x, rate = 1)
 }
 
-# 计算一维KL散度的函数
+# Function to calculate one-dimensional KL divergence
 kl_divergence_1d <- function(p_density, q_density, dx) {
   p_density <- p_density + 1e-10
   q_density <- q_density + 1e-10
   sum(p_density * log(p_density / q_density)) * dx
 }
 
-# 实现Tool 1 for single chain
+# Implement Tool 1 for single chain
 tool_1_single_chain_1d <- function(chain, target_density, threshold = 0.06) {
-  # 对输入的链进行KDE处理，得到链的分布
+  # Perform KDE processing on the input chain to get the distribution of the chain
   akde_chain <- density(chain)
   
-  # 计算分布与目标分布之间的KL散度
+  # Computes the KL divergence between a distribution and the target distribution
   target_density_values <- target_density(akde_chain$x)
   kl_divergence <- kl_divergence_1d(target_density_values, akde_chain$y, diff(akde_chain$x)[1])
   
-  # 检查是否小于阈值
+  # Check if less than threshold
   if(kl_divergence < threshold) {
     print("The chain has converged")
   } else {
@@ -37,7 +37,6 @@ tool_1_single_chain_1d <- function(chain, target_density, threshold = 0.06) {
   
   return(kl_divergence)
 }
-
 
 # Chain1
 kl_div = tool_1_single_chain_1d(chain, target_density, threshold = 0.05)
