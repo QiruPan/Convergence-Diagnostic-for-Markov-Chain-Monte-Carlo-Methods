@@ -1,34 +1,335 @@
-# Tool 1 in the paper
-# The main idea of Tool 1 is to compare the distribution of the MCMC chain with the target distribution. If the chain has reached 
-# equilibrium, these two distributions should be very similar to each other.
-# The comparison is done through Kullback-Leibler (KL) divergence, which is a measure of how one probability distribution diverges 
-# from a second, expected probability distribution. It is an asymmetric measure of the difference between two probability distributions
-# P and Q.
-# In the context of MCMC convergence diagnostics, the KL divergence is used to quantify the difference between the target distribution
-# and the distribution of the MCMC chain.
+library(MASS)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(pdfCluster)
+library(coda)
+library(cubature)
+library(monomvn)
+library(reshape)
+library(mvtnorm)
 
-# Define target distribution
-target_density <- function(x) {
-  dexp(x, rate = 1)
+#Target distribution for using tools
+target <- function(x) {
+  x1 <- x[1]
+  x2 <- x[2]
+  return(exp(-(x1^2)/2) * exp(-((1/sin(x2))^5 - x1)^2/2))
 }
 
-# Function to calculate one-dimensional KL divergence
-kl_divergence_1d <- function(p_density, q_density, dx) {
+# lb and ub
+lb <- c(-10, -10)
+ub <- c(10, 10)
+
+# Target distribution should be proportional to the actual density
+target_density <- function(x, y) {
+  exp(-(x^2)/2) * exp(-((1/sin(y))^5 - x)^2/2)
+}
+
+
+# Metropolis within Gibbs sampler
+sigma <- 0.1
+init <- c(0, 0)
+Metropolis_within_Gibbs <- function(n, start_val) {
+  x <- y <- numeric(n)
+  x[1] <- start_val[1]
+  y[1] <- start_val[2]
+  
+  for(i in 2:n) {
+    # Proposal for x
+    x_star <- rnorm(1, mean = x[i-1], sd = sigma)
+    # Metropolis acceptance probability for x
+    alpha <- min(1, target_density(x_star, y[i-1]) / target_density(x[i-1], y[i-1]))
+    # Metropolis step for x
+    x[i] <- ifelse(runif(1) < alpha, x_star, x[i-1])
+    
+    # Proposal for y
+    y_star <- rnorm(1, mean = y[i-1], sd = sigma)
+    # Metropolis acceptance probability for y
+    beta <- min(1, target_density(x[i], y_star) / target_density(x[i], y[i-1]))
+    # Metropolis step for y
+    y[i] <- ifelse(runif(1) < beta, y_star, y[i-1])
+  }
+  
+  return(data.frame(x=x, y=y))
+}
+
+# Run four chains for Case 1
+set.seed(123)
+n <- 30000
+chain1 <- Metropolis_within_Gibbs(n, start_val=c(0, 5))  # start at mode 1
+chain2 <- Metropolis_within_Gibbs(n, start_val=c(0, 5))  # start at mode 1
+chain3 <- Metropolis_within_Gibbs(n, start_val=c(-1, -5))    # start at mode 2
+chain4 <- Metropolis_within_Gibbs(n, start_val=c(-1, -5))    # start at mode 2
+
+chains <- list(chain1 = as.matrix(chain1),
+               chain2 = as.matrix(chain2),
+               chain3 = as.matrix(chain3),
+               chain4 = as.matrix(chain4))
+
+# Run four chains for Case 2
+set.seed(123)
+chain5 <- Metropolis_within_Gibbs(n, start_val=c(0, -5))  # all start at the same mode
+chain6 <- Metropolis_within_Gibbs(n, start_val=c(0, -5))
+chain7 <- Metropolis_within_Gibbs(n, start_val=c(0, -5))
+chain8 <- Metropolis_within_Gibbs(n, start_val=c(0, -5))
+
+chains2 <- list(chain5 = as.matrix(chain5),
+               chain6 = as.matrix(chain6),
+               chain7 = as.matrix(chain7),
+               chain8 = as.matrix(chain8))
+
+
+# Conventional MCMC Convergence Test
+# Convert chains into mcmc objects
+chain1_mcmc <- as.mcmc(chain1)
+chain2_mcmc <- as.mcmc(chain2)
+chain3_mcmc <- as.mcmc(chain3)
+chain4_mcmc <- as.mcmc(chain4)
+
+# Combine chains into an mcmc.list object
+mcmc_list1 <- mcmc.list(chain1_mcmc, chain2_mcmc, chain3_mcmc, chain4_mcmc)
+
+# Plot trace plots for the chains
+plot(mcmc_list1)
+
+# Compute Gelman-Rubin diagnostic
+gelman.diag(mcmc_list1)
+gelman.plot(mcmc_list1)
+
+# Compute effective sample size
+effectiveSize(mcmc_list1)
+
+# Compute geweke diagnostic
+geweke.diag(mcmc_list1)
+
+# Compute Heidelberger and Welch diagnostic
+heidel.diag(mcmc_list1)
+
+
+
+# Case 2
+# Convert chains into mcmc objects
+chain5_mcmc <- as.mcmc(chain5)
+chain6_mcmc <- as.mcmc(chain6)
+chain7_mcmc <- as.mcmc(chain7)
+chain8_mcmc <- as.mcmc(chain8)
+
+# Combine chains into an mcmc.list object
+mcmc_list2 <- mcmc.list(chain5_mcmc, chain6_mcmc, chain7_mcmc, chain8_mcmc)
+
+# Plot trace plots for the chains
+plot(mcmc_list2)
+
+# Compute Gelman-Rubin diagnostic
+gelman.diag(mcmc_list2)
+gelman.plot(mcmc_list2)
+
+# Compute effective sample size
+effectiveSize(mcmc_list2)
+
+# Compute geweke diagnostic
+print(geweke.diag(mcmc_list2))
+
+# Compute Heidelberger and Welch diagnostic
+heidel.diag(mcmc_list2)
+
+
+
+
+## Trace plot of X for case 1
+# Create separate iteration indexes for each chain
+chain1$iteration <- 1:nrow(chain1)
+chain2$iteration <- 1:nrow(chain2)
+chain3$iteration <- 1:nrow(chain3)
+chain4$iteration <- 1:nrow(chain4)
+
+# Merge samples, add chain number
+chain1$chain <- 1
+chain2$chain <- 2
+chain3$chain <- 3
+chain4$chain <- 4
+chains <- rbind(chain1, chain2, chain3, chain4)
+
+# Only take the last 1000 samples of each chain
+chains_last_1000 <- chains %>%
+  group_by(chain) %>%
+  filter(iteration > n() - 1000)
+
+# Create the trace plot
+ggplot(chains_last_1000, aes(x=iteration, y=x, colour=factor(chain))) +
+  geom_line() +
+  ggtitle("Trace plot for X of all chains")
+
+
+
+## ACF plot of X for case1
+
+lag.max <- 100
+
+# Create an ACF dataframe with chain numbers
+acf_df <- data.frame(
+  chain = rep(1:4, each=lag.max), 
+  lag = rep(1:lag.max, 4), 
+  acf = c(acf(chain1$x, lag.max=lag.max, plot = FALSE)$acf[-1], 
+          acf(chain2$x, lag.max=lag.max, plot = FALSE)$acf[-1],
+          acf(chain3$x, lag.max=lag.max, plot = FALSE)$acf[-1],
+          acf(chain4$x, lag.max=lag.max, plot = FALSE)$acf[-1])
+)
+
+# Create the ACF plot
+ggplot(acf_df, aes(x = lag, y = acf, color = factor(chain))) +
+  geom_line() +
+  ggtitle("ACF for all chains")
+
+
+
+
+
+## Trace plot of Y for case 1
+# Create a trace data frame containing chain number
+trace_df <- data.frame(
+  chain = rep(1:4, each = 1000),
+  iteration = rep((n-999):n, 4),
+  y = c(chain1$y[(n-999):n], chain2$y[(n-999):n], chain3$y[(n-999):n], chain4$y[(n-999):n])
+)
+
+# Create the trace plot
+ggplot(trace_df, aes(x = iteration, y = y, color = factor(chain))) +
+  geom_line() +
+  ggtitle("Trace plot for last 1000 iterations of Y for all chains")
+
+
+
+## ACF plot of Y for case1
+# Create an ACF dataframe with chain numbers
+acf_df <- data.frame(
+  chain = rep(1:4, each = lag.max), 
+  lag = rep(1:lag.max, 4), 
+  acf = c(acf(chain1$y, lag.max = lag.max, plot = FALSE)$acf[-1],
+          acf(chain2$y, lag.max = lag.max, plot = FALSE)$acf[-1],
+          acf(chain3$y, lag.max = lag.max, plot = FALSE)$acf[-1],
+          acf(chain4$y, lag.max = lag.max, plot = FALSE)$acf[-1])
+)
+
+# Create the ACF plot of Y for case1
+ggplot(acf_df, aes(x = lag, y = acf, color = factor(chain))) +
+  geom_line() +
+  ggtitle("ACF for Y for all chains")
+
+
+
+
+
+## Trace plot of X for case 2
+# Create separate iteration indexes for each chain
+chain5$iteration <- 1:nrow(chain5)
+chain6$iteration <- 1:nrow(chain6)
+chain7$iteration <- 1:nrow(chain7)
+chain8$iteration <- 1:nrow(chain8)
+
+# Merge samples, add chain number
+chain5$chain <- 5
+chain6$chain <- 6
+chain7$chain <- 7
+chain8$chain <- 8
+chains <- rbind(chain5, chain6, chain7, chain8)
+
+# Only take the last 1000 samples of each chain
+chains_last_1000 <- chains2 %>%
+  group_by(chain) %>%
+  filter(iteration > n() - 1000)
+
+# Create the trace plot
+ggplot(chains_last_1000, aes(x=iteration, y=x, colour=factor(chain))) +
+  geom_line() +
+  ggtitle("Trace plot for X of all chains")
+
+
+
+## ACF plot of X for case2
+
+lag.max <- 100
+
+# Create an ACF dataframe with chain numbers
+acf_df <- data.frame(
+  chain = rep(1:4, each=lag.max), 
+  lag = rep(1:lag.max, 4), 
+  acf = c(acf(chain5$x, lag.max=lag.max, plot = FALSE)$acf[-1], 
+          acf(chain6$x, lag.max=lag.max, plot = FALSE)$acf[-1],
+          acf(chain7$x, lag.max=lag.max, plot = FALSE)$acf[-1],
+          acf(chain8$x, lag.max=lag.max, plot = FALSE)$acf[-1])
+)
+
+# Create the ACF plot
+ggplot(acf_df, aes(x = lag, y = acf, color = factor(chain))) +
+  geom_line() +
+  ggtitle("ACF for all chains")
+
+
+
+
+
+## Trace plot of Y for case 2
+# Create a trace data frame containing chain number
+trace_df <- data.frame(
+  chain = rep(1:4, each = 1000),
+  iteration = rep((n-999):n, 4),
+  y = c(chain5$y[(n-999):n], chain6$y[(n-999):n], chain7$y[(n-999):n], chain8$y[(n-999):n])
+)
+
+# Create the trace plot
+ggplot(trace_df, aes(x = iteration, y = y, color = factor(chain))) +
+  geom_line() +
+  ggtitle("Trace plot for last 1000 iterations of Y for all chains")
+
+
+
+## ACF plot of Y for case 2
+# Create an ACF dataframe with chain numbers
+acf_df <- data.frame(
+  chain = rep(1:4, each = lag.max), 
+  lag = rep(1:lag.max, 4), 
+  acf = c(acf(chain5$y, lag.max = lag.max, plot = FALSE)$acf[-1],
+          acf(chain6$y, lag.max = lag.max, plot = FALSE)$acf[-1],
+          acf(chain7$y, lag.max = lag.max, plot = FALSE)$acf[-1],
+          acf(chain8$y, lag.max = lag.max, plot = FALSE)$acf[-1])
+)
+
+# Create the ACF plot of Y for case1
+ggplot(acf_df, aes(x = lag, y = acf, color = factor(chain))) +
+  geom_line() +
+  ggtitle("ACF for Y for all chains")
+
+
+
+
+
+
+
+# My attempt of Tool1 & 2
+# Define the function to calculate the KL divergence
+kl_divergence_2d <- function(p_density, q_density, dx, dy) {
   p_density <- p_density + 1e-10
   q_density <- q_density + 1e-10
-  sum(p_density * log(p_density / q_density)) * dx
+  sum(p_density * log(p_density / q_density)) * dx * dy
 }
 
 # Implement Tool 1 for single chain
-tool_1_single_chain_1d <- function(chain, target_density, threshold = 0.06) {
-  # Perform KDE processing on the input chain to get the distribution of the chain
-  akde_chain <- density(chain)
+tool_1_single_chain <- function(chain, target_density, threshold = 0.05) {
+  # Perform KDE processing on the input chain to obtain the joint distribution of the chain
+  akde_chain <- kde2d(chain$x, chain$y)
   
-  # Computes the KL divergence between a distribution and the target distribution
-  target_density_values <- target_density(akde_chain$x)
-  kl_divergence <- kl_divergence_1d(target_density_values, akde_chain$y, diff(akde_chain$x)[1])
+  # Calculate the KL divergence between the joint distribution and the target distribution
+  # Generate all (x, y) pairs
+  points <- expand.grid(akde_chain$x, akde_chain$y)
+  # Calculate target density at each point
+  target_densities <- apply(points, 1, function(p) target_density(p[1], p[2]))
+  # Reshape to 2d
+  target_densities <- matrix(target_densities, nrow = length(akde_chain$x), ncol = length(akde_chain$y))
   
-  # Check if less than threshold
+  kl_divergence <- kl_divergence_2d(target_densities, akde_chain$z, 
+                                    diff(akde_chain$x)[1], diff(akde_chain$y)[1])
+  
   if(kl_divergence < threshold) {
     print("The chain has converged")
   } else {
@@ -38,46 +339,242 @@ tool_1_single_chain_1d <- function(chain, target_density, threshold = 0.06) {
   return(kl_divergence)
 }
 
-# Chain1
-kl_div = tool_1_single_chain_1d(chain, target_density, threshold = 0.05)
-# [1] "The chain has converged"
-
-# Output KL divergence
-print(kl_div)
-# [1] 0.1015121
 
 
-# Chain2
-kl_div = tool_1_single_chain_1d(chain2, target_density, threshold = 0.05)
-# [1] "The chain has not converged"
+#Description: This function generates a random sample from the adaptive kernel density
+#             estimate of the chain. The size of the sample is same as the number of 
+#             observations used to obtain the adaptive kernel density estimate. 
 
-# Output KL divergence
-print(kl_div)
-# [1] 0.03413247
+#Parameters
+#est   : adaptive kernel density estimate obtained using kepdf function in the pdfCluster 
+#        package
+#param : Dimension of the chain
+
+rakden <- function(est, param){
+  samp <- matrix(NA, nrow=nrow(est@x), ncol=ncol(est@x))
+  for(i in 1:nrow(est@x)){
+    t <- sample(c(1:nrow(est@x)), 1)
+    samp[i,] <- rmvnorm(1, est@x[t,], diag(param)*(est@par$hx[t,]^2)) 
+  }
+  return(samp)
+}
+#这是一个在R语言中定义的函数，名为rakden。它基于适应性核密度估计（adaptive kernel density
+#estimate）生成一个随机样本。适应性核密度估计是一种非参数方法，用于估计随机变量的概率密度函数。
+
+#函数rakden的输入参数有两个：
+
+#est：这是使用pdfCluster包中的kepdf函数获得的适应性核密度估计。est@x是基础数据，est@par$hx
+#是核的宽度（bandwidth）。
+#param：这是链的维度。
+#该函数首先创建一个与输入数据大小相同的空矩阵samp。然后，对于est@x中的每一行（即每一个观
+#测值），它都会从est@x的行数中随机抽取一个索引t。最后，它使用多元正态分布生成一个随机样本
+#，并将此样本添加到samp矩阵中。生成多元正态分布的中心（即均值向量）是est@x[t,]，而协方差
+#矩阵是参数乘以核宽度的平方（即diag(param)*(est@par$hx[t,]^2)）。
+
+#最终，函数返回样本矩阵samp，它是基于输入的适应性核密度估计的随机样本。
+
+#请注意，使用此函数需要有rmvnorm函数，这是一个用于生成多元正态分布样本的函数，通常在MASS
+#包或mvtnorm包中可找到。
+
+################################################################################
+
+#Description : This function finds the Kullback leibler divergence between the 
+#              adaptive kernel density estimate of first chain and second chain. 
+#Parameters  
+#s1    : Observations obtained from the first MCMC chain
+#s2    : Observations obtained from the second MCMC chain
+#param : Dimension of the chain
+
+kl <- function(s1, s2, param){
+  ktest <- kepdf(s1, bwtype="adaptive")
+  ep <- rakden(ktest, param)
+  #这里使用ep作为评估点，其实是为了使计算的Kullback-Leibler散度更具有统计意义。在这个情境中，
+  #ep是一个从s1的适应性核密度估计中抽取的样本，所以它可以代表s1的分布特性。然后，我们计算ep在
+  #s1和s2的适应性核密度估计中的值，这样可以更直观地比较s1和s2在相同样本点上的分布差异。
+  a <- kepdf(s1, eval.points = ep, bwtype="adaptive")@estimate
+  b <- kepdf(s2, eval.points = ep, bwtype="adaptive")@estimate
+  ifelse(a < rep(.Machine$double.xmin, length(a)), .Machine$double.xmin, a)
+  ifelse(b < rep(.Machine$double.xmin, length(b)), .Machine$double.xmin, b)
+  p <- log(a)
+  q <- log(b)
+  return((sum(p[is.finite(p)])/sum(is.finite(p))) - (sum(q[is.finite(q)])/sum(is.finite(q))))
+}
+
+####################################################################################
+
+#Description : This function finds the symmetric Kullback leibler divergence between 
+#              the  adaptive kernel density estimate of first chain and second chain. 
+#Parameters  
+#s1    : Observations obtained from the first MCMC chain
+#s2    : Observations obtained from the second MCMC chain
+#param : Dimension of the chain
+
+kl_symm <- function(s1, s2, param){
+  return((kl(s1, s2, param)+kl(s2, s1, param))/2)
+}
+
+###################################################################################
+
+#Description : This function finds the symmetric Kullback leibler divergence between 
+#              the  adaptive kernel density estimates of multiple chains.
+#Parameters  
+#a_list : List containing multiple MCMC chains
+#param  : Dimension of the chain
+
+t1_max <- function(a_list, param){
+  b <- matrix(NA, nrow=length(a_list), ncol=length(a_list))
+  for(k in 1:(length(a_list)- 1)){
+    for(l in (k+1):length(a_list)){
+      b[k, l] <- kl_symm(a_list[[k]], a_list[[l]], param)     
+    }
+  }
+  return(max(b, na.rm=TRUE))
+}
 
 
+#t1_max(chains,2)
+# [1] 77.08806
 
+#t1_max(chains2,2)
+# [1] 0.77    0.05760062
+####################################################################################
 
-# In Tool 1, we first estimate the density of the chain using a kernel density estimator. We then calculate the KL divergence between this 
-# estimated density and the target density.
+#This function is used in the implementation of the visualization tool. 
 
-# The algorithm steps are as follows:
-#  We first generate an MCMC chain and let it run for a while.
-#  Next, we use Kernel Density Estimation (KDE) to estimate the density of the chain.
-#  We calculate the KL divergence between the target distribution and the estimated density of the chain.
+r_intg <- function(mat){
+  a <- nrow(mat)
+  t <- mat[a,]
+  return(rbind(t, mat[1:a-1,]))
+}
 
-# If the KL divergence is small (below some threshold), we conclude that the chain has converged. Otherwise, the chain has not converged.
+#Description : This function produces a tile plot that can help the user to identify 
+#              clusters among multiple chains. 
+#Parameters  
+#c_list : List containing multiple MCMC chains
+#cut    : The cut-off value choosen by the user. For 1d use 0.02 and for 2d use 0.06
+#param  : Dimension of the chain
 
+tool1_viz <- function(c_list, cut, param){
+  b <- matrix(NA, nrow=length(c_list), ncol=length(c_list))
+  b_1 <- matrix(NA, nrow=length(c_list), ncol=length(c_list))
+  for(i in 1:length(c_list))
+  {
+    for(j in 1:length(c_list))
+    {
+      b[i,j] <- kl_symm(c_list[[i]], c_list[[j]], param)
+      b_1[i,j] <- ifelse(b[i,j]>cut, 2, 1)
+      if(i > j | i==j)
+        b_1[i, j] <- 0
+    }
+  }
+  b_1 <- r_intg(b_1)
+  v_1 <- as.vector(t(b_1))
+  x_s <- rep(seq(1,length(c_list), 1), length(c_list))
+  y_s <- rep(seq(length(c_list), 1, -1), each=length(c_list))
+  d_s <- data.frame(cbind(x_s, y_s, v_1))
+  
+  x_1 <- seq(1, length(c_list)-1, 1)
+  y_1 <- seq(length(c_list)-1, 1, -1)
+  lab1 <- seq(1, length(c_list)-1, 1)
+  d_1 <- data.frame(cbind(x_1, y_1, lab1))
+  
+  x_2 <- seq(2, length(c_list), 1)
+  y_2 <- rep(length(c_list), length(c_list)-1)
+  lab2 <- seq(2, length(c_list), 1)
+  d_2 <- data.frame(cbind(x_2, y_2, lab2))
+  
+  return(ggplot() + geom_tile(data=d_s, aes(x = x_s, y = y_s, fill = as.factor(v_1)), color = I("white"), size = I(2)) +
+           scale_fill_manual(limits=c("1","2"), values=c("Grey", "black"), labels=c("Same Cluster", "Different Cluster")) + 
+           geom_text(data=d_1, aes(x = x_1, y = y_1, label = as.character(lab1)), size = I(8))+
+           theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_blank(), axis.line = element_blank())+
+           theme(axis.ticks = element_blank(), axis.text.x = element_blank(), axis.text.y = element_blank())+
+           xlab("")+ylab("")+
+           geom_text(data=d_2, aes(x = x_2 , y = y_2, label = as.character(lab2)), size = I(8))+
+           guides(fill=guide_legend(title=NULL)))
+}
 
-# Note: This tool considers the maximum KL divergence over the different chains. This is a more conservative approach. If the maximum KL 
-# divergence is below a certain threshold, then all chains can be considered as having converged.
+######################################################################################################################################################################
 
-# Remember that KL divergence is not symmetric, so the divergence of P from Q is not the same as the divergence of Q from P. In the context 
-# of MCMC, it's more interesting to compute the divergence of the chain distribution from the target distribution, because we want to know how 
-# much the chain distribution diverges from the target.
+#Description : This function calculates T2^star. The value of the T2^star is the 
+#              percentage of target distribution not yet travelled by the markov 
+#              chain. 
 
-# Tool 1 has the advantage of being a simple and intuitive measure of chain convergence, but it has the disadvantage of being sensitive to the 
-# way the chain's density is estimated. In particular, the results may vary depending on the bandwidth of the kernel density estimator.
+#Parameter   
+#chain  : Matrix containing observations from a single chain. 
+#target : Target distribution known up till the unknown normalizing constant
+#         This function should satisfy the integrand requirements of divonne function
+#         in the R package "R2Cuba" and adaptIntegrate function in R package "cubature".
+#lb     : Lower bound for integrating over the target distribution known up till the 
+#         unknown normalizing constant 
+#ub     : Upper bound for integrating over the target distribution known up till the 
+#         unknown normalizing constant 
 
-# Remember that, as with any other convergence diagnostic, passing Tool 1 is not a guarantee of convergence. It should be used in combination 
-# with other diagnostics and common sense checks.
+kltool2 <- function(chain, target, lb, ub){
+  param <- ncol(chain)
+  ktest <- kepdf(chain, bwtype="adaptive")
+  ep <- rakden(ktest, param)
+  est_chain <- kepdf(chain, eval.points=ep, bwtype = "adaptive")@estimate
+  e <- log(est_chain)
+  a <- sum(e[is.finite(e)])/sum(is.finite(e))
+  tar <- log(apply(chain, 1, target))
+  b <- sum(tar[is.finite(tar)])/sum(is.finite(tar))
+  k_hat <- 1/exp(a - b)
+  if(ncol(chain)==1){
+    k_star <- adaptIntegrate(target, lowerLimit = lb, upperLimit = ub)$integral
+  }
+  else{
+    k_star <-divonne(target, lowerLimit = lb, upperLimit = ub, flags = list(verbose=0))$integral
+    # k_star <- divonne(ndim = ncol(chain), ncomp=1, integrand = target, lower = lb, upper = ub, flags=list(verbose=0))$value
+  }
+  t2_star <- abs(k_hat - k_star)/k_star
+  return(t2_star)
+}
+
+kltool2(chain1,target,lb,ub)
+#[1] 0.8315992
+kltool2(chain2,target,lb,ub)
+#[1] 0.828666
+kltool2(chain3,target,lb,ub)
+#[1] 0.8256517
+kltool2(chain4,target,lb,ub)
+#[1] 0.8265348
+
+kltool2(chain5,target,lb,ub)
+#[1] 0.8263013
+kltool2(chain6,target,lb,ub)
+#[1] 0.8274083
+kltool2(chain7,target,lb,ub)
+#[1] 0.8283718
+kltool2(chain8,target,lb,ub)
+#[1] 0.830165
+
+#########################################################################################################################################
+#contour plot
+
+library(ggplot2)
+library(reshape2)
+
+# Define function
+f <- function(x, y) {
+  exp(-(x^2)/2) * exp(-((1/sin(y))^5 - x)^2/2)
+}
+
+# Create grid
+x <- seq(-10, 10, length.out = 200)
+y <- seq(-10, 10, length.out = 200)
+z <- outer(x, y, f)
+
+# Convert grid to data frame for ggplot
+df <- melt(z)
+names(df) <- c("x", "y", "z")
+df$x <- x[df$x]
+df$y <- y[df$y]
+
+# Create contour plot
+ggplot(df, aes(x = x, y = y, z = z)) + 
+  geom_contour(aes(color = ..level..)) +
+  scale_color_gradient(low = "blue", high = "red") +
+  theme_minimal() +
+  labs(title = "Contour plot of f(x,y)", 
+       x = "X", y = "Y", color = "Density") 
+
